@@ -40,7 +40,7 @@ foreach ($t in $knownTargets) {
     }
 
     $state  = $svc.Status
-    $start  = (Get-WmiObject Win32_Service -Filter "Name='$($t.ServiceName)'" -ErrorAction SilentlyContinue).StartMode
+    $start  = (Get-CimInstance Win32_Service -Filter "Name='$($t.ServiceName)'" -ErrorAction SilentlyContinue).StartMode
 
     if ($state -ne "Running") {
         Log "  [EXPOSED] $($t.ServiceName) is $state (StartMode=$start)"
@@ -63,18 +63,20 @@ $impersonateAccounts = @(
     "NT AUTHORITY\LOCAL SERVICE"
 )
 
-$impersonateProcs = Get-WmiObject Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+$impersonateProcs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
+    $proc = $_
     try {
-        $owner = $_.GetOwner()
+        $owner = Invoke-CimMethod -InputObject $proc -MethodName GetOwner -ErrorAction SilentlyContinue
         $fullName = "$($owner.Domain)\$($owner.User)"
-        $impersonateAccounts -contains $fullName
-    } catch { $false }
-}
+        if ($impersonateAccounts -contains $fullName) {
+            [PSCustomObject]@{ ProcessId = $proc.ProcessId; Name = $proc.Name; Owner = $fullName }
+        }
+    } catch {}
+} | Where-Object { $_ -ne $null }
 
 if ($impersonateProcs) {
     foreach ($p in $impersonateProcs) {
-        $o = $p.GetOwner()
-        Log "  [INFO] PID $($p.ProcessId) $($p.Name) running as $($o.Domain)\$($o.User)"
+        Log "  [INFO] PID $($p.ProcessId) $($p.Name) running as $($p.Owner)"
     }
     Log ""
     Log "  NOTE: Processes above hold SeImpersonatePrivilege by default."
