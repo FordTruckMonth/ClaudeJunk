@@ -22,9 +22,31 @@ The intent is to generate a realistic stream of suspicious-but-detectable events
 | SDK | Windows SDK with `cfapi.h` / `CldApi.lib` |
 | Libs linked | `synchronization.lib`, `ntdll.lib`, `CldApi.lib` |
 
-```
-cl /EHsc /W4 edr_test_cleaned.cpp /link synchronization.lib ntdll.lib CldApi.lib
-```
+## Compiling
+
+**Option A — Visual Studio Developer Command Prompt (recommended)**
+
+1. Install [Visual Studio](https://visualstudio.microsoft.com/) with the **Desktop development with C++** workload. This includes the compiler (`cl.exe`) and the Windows SDK.
+2. Open the **Start Menu** and search for *"Developer Command Prompt for VS"* — launch it.
+3. Navigate to the folder containing `edr_test_cleaned.cpp`:
+   ```
+   cd path\to\edr_test
+   ```
+4. Compile:
+   ```
+   cl /EHsc /W4 edr_test_cleaned.cpp /link synchronization.lib ntdll.lib CldApi.lib
+   ```
+5. This produces `edr_test_cleaned.exe` in the same directory.
+
+**Option B — Visual Studio IDE**
+
+1. Open Visual Studio and choose **Create a new project → Console App (C++)**.
+2. Replace the generated `.cpp` with `edr_test_cleaned.cpp`.
+3. Go to **Project → Properties → Linker → Input → Additional Dependencies** and add:
+   ```
+   synchronization.lib;ntdll.lib;CldApi.lib
+   ```
+4. Press **Ctrl+B** to build. The `.exe` will appear under `x64\Debug\` or `x64\Release\`.
 
 ## Usage
 
