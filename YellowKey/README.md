@@ -28,7 +28,24 @@ The drive can be:
 
 ---
 
-## Reproduction Steps
+## Quick Start (Automated)
+
+Run the included PowerShell deployer from an elevated prompt — it handles directory creation, file copying, and verification:
+
+```powershell
+# Interactive drive picker
+.\deploy.ps1
+
+# Target a specific drive letter
+.\deploy.ps1 -TargetDrive E:
+
+# Deploy and eject the USB when done
+.\deploy.ps1 -TargetDrive E: -Eject
+```
+
+The script requires Administrator privileges (needed to write into `System Volume Information\`).
+
+## Reproduction Steps (Manual)
 
 1. Copy the `FsTx/` folder from this repo to `<USB>:\System Volume Information\FsTx\` (preserving structure).
 2. Insert the USB into a Windows 11 machine with BitLocker enabled (or write to its EFI partition directly).
