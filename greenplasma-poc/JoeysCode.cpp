@@ -1,9 +1,17 @@
+// If building in a VS project that was created with the wizard, go to:
+// Project -> Properties -> C/C++ -> Precompiled Headers -> set to "Not Using Precompiled Headers"
+// Otherwise the wizard-generated pch.h include will break compilation.
+
+#define _CRT_SECURE_NO_WARNINGS  // suppress swprintf/swprintf_s deprecation in MSVC
+
 #include <Windows.h>
 #include <winternl.h>
 #include <stdio.h>
 #include <tlhelp32.h>
 
 #pragma comment(lib, "ntdll.lib")
+#pragma comment(lib, "advapi32.lib")  // token APIs, AdjustTokenPrivileges, CreateProcessWithTokenW
+#pragma comment(lib, "shell32.lib")   // ShellExecuteEx
 
 typedef NTSTATUS (NTAPI* _NtCreateSymbolicLinkObject)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PUNICODE_STRING);
 typedef NTSTATUS (NTAPI* _NtOpenSection)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES);
