@@ -16,7 +16,3 @@ set_property(TARGET GreenPlasma PROPERTY CXX_STANDARD 17)
 add_executable(JoeysCode JoeysCode.cpp)
 target_link_libraries(JoeysCode ntdll advapi32 shell32)
 set_property(TARGET JoeysCode PROPERTY CXX_STANDARD 17)
-
-add_executable(CloudPivot CloudPivot.cpp)
-target_link_libraries(CloudPivot ntdll advapi32 shell32 CldApi)
-set_property(TARGET CloudPivot PROPERTY CXX_STANDARD 17)
