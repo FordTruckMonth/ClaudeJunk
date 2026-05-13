@@ -136,7 +136,7 @@ void SelfTest(const std::wstring& workDir, const std::atomic<int>& armed) {
     std::wcout << L"\n[test] All traps armed. Firing oplock break on target_0.tmp..." << std::endl;
     std::wstring bait = workDir + L"\\target_0.tmp";
 
-    HANDLE h = CreateFileW(bait.c_str(), GENERIC_READ, FILE_SHARE_NONE,
+    HANDLE h = CreateFileW(bait.c_str(), GENERIC_READ, 0,
         NULL, OPEN_EXISTING, 0, NULL);
     if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
 }
