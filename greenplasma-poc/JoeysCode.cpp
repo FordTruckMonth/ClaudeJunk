@@ -13,6 +13,16 @@
 #pragma comment(lib, "advapi32.lib")  // token APIs, AdjustTokenPrivileges, CreateProcessWithTokenW
 #pragma comment(lib, "shell32.lib")   // ShellExecuteEx
 
+// Static CRT linkage — prevents "missing MSVCP140.dll" on machines without
+// the VC++ redistributable installed.
+#pragma comment(linker, "/NODEFAULTLIB:msvcrt.lib")
+#pragma comment(linker, "/NODEFAULTLIB:msvcrtd.lib")
+#ifdef _DEBUG
+#pragma comment(lib, "libcmtd.lib")
+#else
+#pragma comment(lib, "libcmt.lib")
+#endif
+
 typedef NTSTATUS (NTAPI* _NtCreateSymbolicLinkObject)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PUNICODE_STRING);
 typedef NTSTATUS (NTAPI* _NtOpenSection)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES);
 
