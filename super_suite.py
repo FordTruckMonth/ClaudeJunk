@@ -3,8 +3,6 @@
 ClaudeJunk Super Suite — unified curses TUI for all ClaudeJunk programs.
 
 Included programs
-  scariest.py          Python dark arts educational demo
-  happiness.ps1        Morale-boosting affirmations (ported to Python)
   find-blaze.ps1       Blaze browser forensic detection tool
   change-password.ps1  Windows password change reference
   edr_test/            Windows C++ EDR/AV test suite (info + build)
@@ -19,186 +17,8 @@ Usage
 """
 
 import curses
-import random
-import sys
-import ctypes
-import types
-import threading
-import importlib.abc
-import importlib.util
-
-# ─── Dark Arts: classes and functions (from scariest.py) ──────────────────────
-
-class _Erased(type):
-    """Metaclass that overwrites a class's __name__ with ■ at creation time."""
-    def __new__(mcs, name, bases, ns):
-        return super().__new__(mcs, "■", bases, ns)
-
-class _Subject(metaclass=_Erased):
-    pass
-
-class _Liar:
-    """Object that returns True/False arbitrarily for every comparison."""
-    __class__ = property(lambda s: int)
-    def __eq__(self, _):  return True
-    def __ne__(self, _):  return True
-    def __bool__(self):   return False
-    def __hash__(self):   return 0
-
-def _add_honest(a, b):
-    "Returns a + b."
-    return a + b
-
-def _add_sabotaged(a, b):
-    return a * b - 1
-
-_add_honest.__code__ = _add_sabotaged.__code__   # docstring unchanged; behaviour replaced
-
-_memory: list = []
-def _remember(soul=None):
-    if soul is not None:
-        _memory.append(soul)
-    return _memory
-
-# ─── Happiness content (ported from happiness.ps1) ────────────────────────────
-
-_AFFIRMATIONS = [
-    "You are doing better than you think.",
-    "Someone is grateful you exist today.",
-    "The world is more interesting because you're in it.",
-    "Small progress is still progress.",
-    "You've survived 100% of your worst days so far.",
-    "Your future self is rooting for you.",
-    "It's okay to rest. Productivity is not your worth.",
-    "Something good is on its way.",
-    "You are allowed to take up space.",
-    "You handled today. That counts.",
-]
-
-_ANIMAL_FACTS = [
-    "Otters hold hands while sleeping so they don't drift apart.",
-    "Honeybees can recognize human faces.",
-    "Cows have best friends and get stressed when separated.",
-    "Wombats poop cubes.",
-    "A group of flamingos is called a 'flamboyance'.",
-    "Sea otters keep a favorite rock in a pouch under their arm.",
-    "Norway once knighted a penguin (Sir Nils Olav).",
-    "Bumblebees can fly higher than Mount Everest.",
-    "Goats have rectangular pupils so they can see almost 360 degrees.",
-    "Pigeons can recognize themselves in mirrors.",
-]
-
-_SUN = r"""       \    |    /
-        \   |   /
-     ----- (*) -----
-        /   |   \
-       /    |    \
-"""
 
 # ─── Feature content functions ─────────────────────────────────────────────────
-
-def _content_dark_arts():
-    _remember("yours")
-    _remember("mine")
-    _remember("everyone who ever called this")
-    return [
-        "THE SCARIEST FILE  —  Python Dark Arts Demo",
-        "=" * 60,
-        "",
-        "  The horrors below are real, executable Python. Each one is",
-        "  something you can do with a stock interpreter — no third-party",
-        "  packages, no root, no special compilation. The knife ships in",
-        "  the box; the box is labelled 'batteries included.'",
-        "",
-        "I.   THE INTEGER CACHE IS NOT IMMUTABLE",
-        "",
-        "     CPython interns the integers -5..256 as process-wide singletons.",
-        "     Every `7` in every library points at the same object. Via ctypes",
-        "     we can open that object's memory and write a different value into",
-        "     it. After one call, 4+3 returns something else everywhere, in",
-        "     every imported library, forever. There is no rollback.",
-        "     (Demo left commented — uncommenting taints this interpreter.)",
-        "",
-        "II.  A METACLASS THAT SWALLOWS ITS CHILD'S NAME",
-        "",
-        f"     _Subject.__name__  →  {_Subject.__name__!r}",
-        "     _Subject.__name__  should be  'Subject'",
-        "     Every traceback, repr, and isinstance error refers to it as ■.",
-        "     The class erases its own identity at the moment of creation.",
-        "",
-        "III. AN IMPORT HOOK THAT FABRICATES WHATEVER YOU ASK FOR",
-        "",
-        "     sys.meta_path accepts custom finders. Place one there and it",
-        "     intercepts every `import` statement. The module 'trust' does not",
-        "     exist on disk; pip does not list it; `pip list` is silent.",
-        "     Yet `import trust.me` succeeds, and every attribute access",
-        "     returns the module itself, recursively.",
-        "     `trust.me.anything.you.want`  →  <module 'trust.me'>",
-        "",
-        "IV.  MUTABLE DEFAULT ARGUMENTS, WEAPONISED",
-        "",
-        f"     _remember() called 3×  →  {len(_remember())} souls accumulated",
-        "     The backing list is created once, at function-definition time.",
-        "     Every call appends to the same object. Nothing ever frees it.",
-        "     The function accumulates state silently for its entire lifetime.",
-        "",
-        "V.   AN OBJECT THAT LIES ABOUT EVERY CHECK",
-        "",
-        f"     _Liar() == 0                →  {_Liar() == 0}",
-        f"     _Liar() != 0                →  {_Liar() != 0}",
-        f"     isinstance(_Liar(), int)    →  {isinstance(_Liar(), int)}",
-        f"     type(_Liar()) is int        →  {type(_Liar()) is int}",
-        f"     bool(_Liar())               →  {bool(_Liar())}",
-        "     Every contract this object presents is a lie.",
-        "     Validators are theatre.",
-        "",
-        "VI.  BYTECODE REPLACEMENT",
-        "",
-        f"     _add_honest(3, 4)           →  {_add_honest(3, 4)}  (docstring says it adds)",
-        "     _add_honest.__doc__         →  'Returns a + b.'",
-        "     The function's __code__ was replaced after definition.",
-        "     inspect.getsource() returns the original lines. The docstring is",
-        "     unchanged. The signature is unchanged. Only execution differs.",
-        "",
-        "VII. THE THREAD THAT CANNOT BE KILLED",
-        "",
-        "     A daemon thread runs a tight loop swallowing every BaseException,",
-        "     including KeyboardInterrupt. Python has no public API to forcibly",
-        "     stop a running thread. The only kill switch is process exit.",
-        "",
-        "VIII.THE EXIT HOOK THAT GETS THE LAST WORD",
-        "",
-        "     atexit.register() installs a callback for interpreter shutdown.",
-        "     You cannot unregister it from outside the module. It runs after",
-        "     your __main__ block, after all other cleanup, as the door closes.",
-        "",
-        "  Loaded. Nothing terrible seems to have happened.",
-        "",
-        "  ── Run scariest.py directly for live execution ──",
-    ]
-
-
-def _content_happiness():
-    affirmation = random.choice(_AFFIRMATIONS)
-    fact = random.choice(_ANIMAL_FACTS)
-    lines = [
-        "HAPPINESS BOOST  —  ported from happiness.ps1",
-        "=" * 60,
-        "",
-    ]
-    for art_line in _SUN.split("\n"):
-        lines.append(art_line)
-    lines += [
-        "",
-        f"  {affirmation}",
-        "",
-        "  Did you know?",
-        f"  {fact}",
-        "",
-        "  ── Return to menu and re-enter for a new message ──",
-    ]
-    return lines
-
 
 def _static(text):
     """Wrap a multi-line string as a no-arg callable returning a list of lines."""
@@ -566,15 +386,13 @@ TO RUN ON WINDOWS
 
 # curses color pair indices
 _CP_TITLE  = 1   # cyan      — banner / selected item
-_CP_EDU    = 2   # yellow    — educational
-_CP_FUN    = 3   # green     — fun/utility
-_CP_FOR    = 4   # blue      — forensics
-_CP_WIN    = 5   # red       — windows admin
-_CP_SEC    = 6   # magenta   — security research
-_CP_HDR    = 7   # bold cyan — section headers in pager
+_CP_FUN    = 2   # green     — fun/utility
+_CP_FOR    = 3   # blue      — forensics
+_CP_WIN    = 4   # red       — windows admin
+_CP_SEC    = 5   # magenta   — security research
+_CP_HDR    = 6   # bold cyan — section headers in pager
 
 _TAG_COLOR = {
-    "EDU": _CP_EDU,
     "FUN": _CP_FUN,
     "FOR": _CP_FOR,
     "WIN": _CP_WIN,
@@ -582,7 +400,6 @@ _TAG_COLOR = {
 }
 
 _TAG_LABEL = {
-    "EDU": "Educational",
     "FUN": "Fun / Utility",
     "FOR": "Forensics",
     "WIN": "Windows Admin",
@@ -591,8 +408,6 @@ _TAG_LABEL = {
 
 # (display name, category tag, content callable)
 _MENU = [
-    ("Python Dark Arts",        "EDU", _content_dark_arts),
-    ("Happiness Boost",         "FUN", _content_happiness),
     ("Blaze Browser Detector",  "FOR", _content_blaze),
     ("Password Changer Ref",    "WIN", _content_password),
     ("EDR Test Suite",          "SEC", _content_edr),
@@ -608,7 +423,7 @@ _BANNER = [
     "  │                                                     │",
     "  │      C L A U D E J U N K   S U P E R   S U I T E  │",
     "  │                                                     │",
-    "  │      10 programs  ·  1 interface  ·  all features  │",
+    "  │       8 programs  ·  1 interface  ·  all features  │",
     "  │                                                     │",
     "  └─────────────────────────────────────────────────────┘",
 ]
@@ -618,7 +433,6 @@ _BANNER = [
 def _init_colors():
     curses.use_default_colors()
     curses.init_pair(_CP_TITLE, curses.COLOR_CYAN,    -1)
-    curses.init_pair(_CP_EDU,   curses.COLOR_YELLOW,  -1)
     curses.init_pair(_CP_FUN,   curses.COLOR_GREEN,   -1)
     curses.init_pair(_CP_FOR,   curses.COLOR_BLUE,    -1)
     curses.init_pair(_CP_WIN,   curses.COLOR_RED,     -1)
