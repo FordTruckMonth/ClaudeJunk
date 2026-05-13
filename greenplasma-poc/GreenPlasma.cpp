@@ -1,4 +1,8 @@
-#include <iostream>
+// If building in a VS project created with the wizard, disable precompiled headers:
+// Project -> Properties -> C/C++ -> Precompiled Headers -> Not Using Precompiled Headers
+
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <Windows.h>
 #include <winternl.h>
 #include <aclapi.h>
@@ -6,9 +10,20 @@
 #include <tlhelp32.h>
 #include <sddl.h>
 #include <conio.h>
+#include <stdio.h>
 
 #pragma comment(lib, "ntdll.lib")
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "shell32.lib")
+
+// Static CRT — prevents "missing MSVCP140.dll" on machines without the VC++ redistributable.
+#pragma comment(linker, "/NODEFAULTLIB:msvcrt.lib")
+#pragma comment(linker, "/NODEFAULTLIB:msvcrtd.lib")
+#ifdef _DEBUG
+#pragma comment(lib, "libcmtd.lib")
+#else
+#pragma comment(lib, "libcmt.lib")
+#endif
 
 #define RtlOffsetToPointer(Base, Offset) ((PUCHAR)(((PUCHAR)(Base)) + ((ULONG_PTR)(Offset))))
 
