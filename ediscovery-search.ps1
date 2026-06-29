@@ -5,7 +5,7 @@
     Interactive eDiscovery compliance search with optional soft purge.
 #>
 
-# ── Prompt user for inputs ────────────────────────────────────────────────────
+# -- Prompt user for inputs ---------------------------------------------------
 $SenderEmail = Read-Host "Enter the sender email address to search for"
 if ([string]::IsNullOrWhiteSpace($SenderEmail)) {
     Write-Error "Sender email cannot be empty."
@@ -20,7 +20,7 @@ if ([string]::IsNullOrWhiteSpace($SearchName)) {
 
 $Query = "From:$SenderEmail"
 
-# ── Create and start the compliance search ────────────────────────────────────
+# -- Create and start the compliance search -----------------------------------
 Write-Host "`nCreating compliance search '$SearchName'..." -ForegroundColor Cyan
 try {
     New-ComplianceSearch -Name $SearchName -ExchangeLocation All -ContentMatchQuery $Query -ErrorAction Stop | Out-Null
@@ -32,7 +32,7 @@ try {
 Write-Host "Starting compliance search..." -ForegroundColor Cyan
 Start-ComplianceSearch -Identity $SearchName
 
-# ── Poll until the search completes ──────────────────────────────────────────
+# -- Poll until the search completes ------------------------------------------
 Write-Host "Waiting for search to complete" -NoNewline
 do {
     Start-Sleep -Seconds 5
@@ -47,12 +47,12 @@ if ($Search.Status -ne "Completed") {
     exit 1
 }
 
-# ── Display results ───────────────────────────────────────────────────────────
-Write-Host "`n── Search Results ───────────────────────────────────────" -ForegroundColor Green
+# -- Display results ----------------------------------------------------------
+Write-Host "`n-- Search Results ---------------------------------------------------" -ForegroundColor Green
 $Search | Format-List Name, Status, Items, Size, ContentMatchQuery
-Write-Host "─────────────────────────────────────────────────────────`n" -ForegroundColor Green
+Write-Host "---------------------------------------------------------------------`n" -ForegroundColor Green
 
-# ── Export results to CSV in the user's Downloads folder ─────────────────────
+# -- Export results to CSV in the user's Downloads folder ---------------------
 $DownloadsPath = [System.IO.Path]::Combine($env:USERPROFILE, "Downloads")
 $CsvPath       = [System.IO.Path]::Combine($DownloadsPath, "$SearchName.csv")
 
@@ -61,9 +61,9 @@ $Search | Select-Object Name, Status, Items, Size, ContentMatchQuery, CreatedTim
 
 Write-Host "Results exported to: $CsvPath" -ForegroundColor Yellow
 
-# ── Offer soft purge ─────────────────────────────────────────────────────────
+# -- Offer soft purge ---------------------------------------------------------
 if ($Search.Items -eq 0) {
-    Write-Host "No items found — skipping purge option." -ForegroundColor DarkGray
+    Write-Host "No items found - skipping purge option." -ForegroundColor DarkGray
     exit 0
 }
 
