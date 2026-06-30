@@ -249,17 +249,27 @@ if ($IncludeUpdateHistory) {
 Write-Host "`n  [Patch Assessment]"
 $patchVerdict = 'Unconfirmed'
 if ($julyMinUbr.ContainsKey($buildNum)) {
-    $result.HasRceFix     = $ubrNum -ge $julyMinUbr[$buildNum]
-    $result.HasAugDefault = $augMinUbr.ContainsKey($buildNum) -and ($ubrNum -ge $augMinUbr[$buildNum])
-    if ($result.HasRceFix) {
-        $patchVerdict = 'Patched'
-        Write-Host "  OS build $buildString meets/exceeds $buildNum.$($julyMinUbr[$buildNum]), the revision that first" -ForegroundColor Green
-        Write-Host "  carried the CVE-2021-34527 Spooler RCE fix. Patched." -ForegroundColor Green
+    if ($ubrNum -le 0) {
+        # Every shipped Win10/11 build has UBR >= 1; a 0 here means the revision could not
+        # be read (e.g. blocked registry access), which is "unknown", not "below the floor".
+        # Treat it as Unconfirmed rather than wrongly declaring a patched host Vulnerable.
+        $patchVerdict = 'Unconfirmed'
+        Write-Host "  Build $buildString maps to an affected version, but its revision (UBR) could not be" -ForegroundColor Yellow
+        Write-Host "  read, so patch level is unconfirmed. Verify it meets $buildNum.$($julyMinUbr[$buildNum]) or later." -ForegroundColor Yellow
+        $result.Notes += "UBR unreadable for affected build $buildNum; patch level unconfirmed."
     } else {
-        $patchVerdict = 'Vulnerable'
-        Write-Host "  OS build $buildString is BELOW $buildNum.$($julyMinUbr[$buildNum]), the revision that first carried" -ForegroundColor Red
-        Write-Host "  the CVE-2021-34527 fix. This host is MISSING the PrintNightmare patch." -ForegroundColor Red
-        $result.Notes += "OS build $buildString is below the patched revision $buildNum.$($julyMinUbr[$buildNum])."
+        $result.HasRceFix     = $ubrNum -ge $julyMinUbr[$buildNum]
+        $result.HasAugDefault = $augMinUbr.ContainsKey($buildNum) -and ($ubrNum -ge $augMinUbr[$buildNum])
+        if ($result.HasRceFix) {
+            $patchVerdict = 'Patched'
+            Write-Host "  OS build $buildString meets/exceeds $buildNum.$($julyMinUbr[$buildNum]), the revision that first" -ForegroundColor Green
+            Write-Host "  carried the CVE-2021-34527 Spooler RCE fix. Patched." -ForegroundColor Green
+        } else {
+            $patchVerdict = 'Vulnerable'
+            Write-Host "  OS build $buildString is BELOW $buildNum.$($julyMinUbr[$buildNum]), the revision that first carried" -ForegroundColor Red
+            Write-Host "  the CVE-2021-34527 fix. This host is MISSING the PrintNightmare patch." -ForegroundColor Red
+            $result.Notes += "OS build $buildString is below the patched revision $buildNum.$($julyMinUbr[$buildNum])."
+        }
     }
 } elseif ($buildNum -gt $highestAffectedBuild) {
     $result.HasRceFix     = $true
