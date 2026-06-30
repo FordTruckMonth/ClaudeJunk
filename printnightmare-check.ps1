@@ -1,67 +1,76 @@
 <#
 .SYNOPSIS
-    PrintNightmare posture check — verifies the installed patch level AND the Point and
-    Print registry mitigations in one pass, then reports a single definitive result.
+    Checks whether this Windows computer is protected against the PrintNightmare
+    vulnerability, and prints a single Protected / Exposed / Unconfirmed result.
 
 .DESCRIPTION
-    Read-only. Combines the old two-step "Run1st + Run2nd" workflow so you get, in one run:
+    PrintNightmare is a Windows Print Spooler vulnerability (CVE-2021-1675 and
+    CVE-2021-34527). A computer is protected when BOTH of these are true:
+      * the Windows security update that fixes it is installed, AND
+      * the Point and Print printer-driver settings are configured safely.
 
-      1. Print Spooler service state.
-      2. Installed updates / patch context. Lists ALL installed updates (newest first,
-         no five-row truncation) and decides a patch verdict by comparing the true OS
-         build revision (Build.UBR) against the per-build patched revision Microsoft
-         shipped the fix in.
-      3. Point and Print registry mitigations, ending in the clear safe/exposed
-         confirmation that "Run2nd" produced.
-      4. A single combined RESULT covering both patch and registry posture.
+    This script checks both in one read-only pass and reports where the computer
+    stands. It makes no changes to the system.
 
-    Makes no changes to the system.
+    WHAT IT CHECKS
+      1. Print Spooler service - whether the service the exploit abuses is present
+         and running.
+      2. Patch level - the installed Windows updates plus the exact OS build and
+         revision (Build.UBR), compared against the revision Microsoft first shipped
+         the fix in, to confirm the PrintNightmare update is present.
+      3. Point and Print registry settings - the three values that decide whether a
+         non-administrator can install printer drivers:
+           - RestrictDriverInstallationToAdministrators: should be 1 (or absent on a
+             computer patched Aug 2021 or later) - restricts driver installs to admins.
+           - NoWarningNoElevationOnInstall: should be 0 or absent - a 1 suppresses the
+             elevation prompt when installing a driver.
+           - UpdatePromptSettings: should be 0 or absent - a 1 suppresses the elevation
+             prompt when updating a driver.
 
-    Designed to run both interactively AND non-interactively through a remote runner such
-    as SentinelOne RemoteOps / Remote Script Orchestration (runs as SYSTEM, captures
-    stdout). For fleet use, pass -AsJson to emit one clean JSON object to stdout (decorative
-    output suppressed) so results parse across endpoints. In normal mode the script also
-    prints a single machine-readable "PrintNightmare: Status=..." line to stdout.
+    WHAT YOU GET
+      * A readable report for each section, ending in one overall result:
+        Protected, Exposed, or Unconfirmed (the patch level could not be determined).
+      * With -AsJson, a single JSON object is written to stdout instead, for automated
+        or fleet use. In normal mode a one-line summary is also printed:
+        "PrintNightmare: Status=...; Patch=...; Registry=...; Build=...; Computer=...".
+      * Exit codes: 0 = ran successfully (read the Status for the verdict),
+        3 = the script hit an error. With -FailOnExposed it exits 1 when Exposed.
 
-    Exit codes: 0 = evaluated OK (read the captured Status for the verdict), 3 = the script
-    hit an unexpected error. Pass -FailOnExposed to instead exit 1 when the verdict is
-    EXPOSED (for teams that triage on the runner's exit status).
-
-    Background. PrintNightmare is CVE-2021-1675 (the original Spooler elevation of
-    privilege, June 8 2021) and CVE-2021-34527 (the out-of-band Spooler RCE, July 6-7
-    2021). A related Point and Print default-behaviour change shipped August 10 2021
-    (CVE-2021-34481): from that update on, RestrictDriverInstallationToAdministrators
-    defaults to 1 (admin-only). Both facts matter, so this script keys its verdicts off
-    the OS Build.UBR — not off update install dates, which a recent unrelated package
-    (e.g. a .NET rollup) could otherwise spoof into a false "patched" reading.
+    HOW TO RUN
+      Open PowerShell as Administrator (for the most complete update inventory), then:
+        .\printnightmare-check.ps1
+      For automated collection that captures and parses output:
+        .\printnightmare-check.ps1 -AsJson
 
 .PARAMETER AsJson
-    Emit only a single JSON result object to stdout (suppresses the human-readable report).
-    Best for SentinelOne / fleet runs where output is captured and parsed centrally.
+    Emit only a single JSON result object to stdout and suppress the readable report.
+    Use when output is captured and parsed centrally (automated or fleet runs).
 
 .PARAMETER FailOnExposed
-    Exit 1 when the overall verdict is EXPOSED. Off by default, so a healthy run does not
-    show up as a failed task in the remote runner. Script errors always exit 3.
+    Exit 1 when the overall verdict is EXPOSED. Off by default, so a healthy run does
+    not look like a failed task to a remote runner. Script errors always exit 3.
 
 .PARAMETER IncludeUpdateHistory
-    Also query the Windows Update agent history (COM) for a fuller list of installed
-    updates than Get-HotFix returns (Get-HotFix only sees CBS-serviced updates). Slower
-    and noisier; off by default. Ignored under -AsJson.
+    Also list the Windows Update agent history (a fuller list than Get-HotFix, which
+    only sees CBS-serviced updates). Slower and noisier; off by default. Ignored under -AsJson.
 
 .PARAMETER ExportJson
-    Optional path to write the structured result object as JSON file (for non-runner use).
+    Optional path to also write the structured result to a JSON file.
 
 .EXAMPLE
     .\printnightmare-check.ps1
+    Runs the check and prints the readable report.
 
 .EXAMPLE
-    # SentinelOne RemoteOps: pass -AsJson, capture stdout, parse the JSON per endpoint.
     .\printnightmare-check.ps1 -AsJson
+    Prints a single JSON result object to stdout, for automated collection.
 
 .NOTES
-    Read-only. Runs as SYSTEM under SentinelOne (full update/registry visibility).
-    Build/UBR thresholds verified against Microsoft Support KB pages (KB5004945/46/47/48/50,
-    KB5005033/31/30/43/40) and KB5005652 (the Aug 2021 default-behaviour change).
+    Read-only; makes no changes. Run as Administrator (or SYSTEM) for the most complete
+    update inventory.
+    PrintNightmare: CVE-2021-1675 / CVE-2021-34527 (plus the Aug 2021 Point and Print
+    default change, CVE-2021-34481). Build/UBR thresholds verified against Microsoft
+    Support KB pages (KB5004945/46/47/48/50, KB5005033/31/30/43/40, KB5005652).
 #>
 [CmdletBinding()]
 param(
@@ -354,11 +363,10 @@ $result.Registry.RestrictDriverInstallationToAdministrators = $restrictAdmin
 $result.Registry.NoWarningNoElevationOnInstall              = $noWarnInstall
 $result.Registry.UpdatePromptSettings                       = $updatePrompt
 
-# Registry assessment (Run2nd-style confirmation), with the nuance the original scripts
-# missed: a *missing* RestrictDriverInstallationToAdministrators is only the safe
-# (admin-only) default once the August 10 2021 update is installed. On a July-2021-only
-# host the absent default is 0 (exposed). We resolve that from the build (HasAugDefault),
-# not from an install date.
+# Registry assessment. Note the nuance: a *missing*
+# RestrictDriverInstallationToAdministrators is only the safe (admin-only) default once
+# the August 10 2021 update is installed. On a July-2021-only host the absent default is 0
+# (exposed). We resolve that from the build (HasAugDefault), not from an install date.
 Say "`n  [Registry Assessment]"
 $registrySafe = $true
 if ($restrictAdmin -eq 0) {
