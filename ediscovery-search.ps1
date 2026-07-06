@@ -101,20 +101,21 @@ while ($true) {
     foreach ($Part in ($Entry -split '[,;\s]+')) {
         $Addr = $Part.Trim().Trim('<', '>', '"', "'").ToLowerInvariant()
         if (-not $Addr) { continue }
-        # '*@domain.com' or '@domain.com' means the whole domain: KQL's From:
-        # property matches partial addresses, so From:"domain.com" catches
-        # every sender at that domain. (Leading wildcards are not valid KQL.)
+        # '*@domain.com' or '@domain.com' means the whole domain. Microsoft's
+        # eDiscovery docs: specify "@contoso.com" in From to match everyone in
+        # the domain. (A leading * wildcard is not valid KQL.)
         if ($Addr -match '^\*?@(.+)$') {
             $Domain = $Matches[1]
             if ($Domain -notmatch '^[^@\s]+\.[^@\s]+$') {
                 Write-Warning "'$Addr' does not look like a valid domain - skipped."
                 continue
             }
-            if ($Senders.Contains($Domain)) {
-                Write-Host "  (duplicate '$Domain' ignored)" -ForegroundColor DarkGray
+            $DomainToken = "@$Domain"
+            if ($Senders.Contains($DomainToken)) {
+                Write-Host "  (duplicate '$DomainToken' ignored)" -ForegroundColor DarkGray
             } else {
-                $Senders.Add($Domain)
-                Write-Host "  + $Domain (entire domain)" -ForegroundColor DarkGray
+                $Senders.Add($DomainToken)
+                Write-Host "  + $DomainToken (entire domain)" -ForegroundColor DarkGray
             }
             continue
         }
