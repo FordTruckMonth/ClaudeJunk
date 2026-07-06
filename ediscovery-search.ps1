@@ -2,19 +2,24 @@
 
 <#
 .SYNOPSIS
-    Interactive eDiscovery compliance search with optional soft purge.
+    Batch eDiscovery compliance searches (one per sender) with per-search soft purge.
 
 .DESCRIPTION
-    Connects to Security & Compliance PowerShell, prompts for a sender address
-    and a search name, runs a single ComplianceSearch, displays and exports the
-    results to a CSV in the user's Downloads folder, then optionally performs a
-    SoftDelete purge.
+    Connects to Security & Compliance PowerShell, collects a list of sender
+    addresses, creates and runs one ComplianceSearch per sender (named
+    "YYYY-MM-DD <sender>"), shows a summary of item counts, exports a combined
+    CSV to the user's Downloads folder, then offers a SoftDelete purge for each
+    search individually.
 
 .NOTES
     The *-ComplianceSearch cmdlets are Security & Compliance (Microsoft Purview)
     cmdlets, NOT Exchange Online. They require Connect-IPPSSession, and since the
     2025 enforcement (MC1131771) also require -EnableSearchOnlySession, which
     needs ExchangeOnlineManagement v3.9.0+.
+
+    A soft purge removes at most 10 items per mailbox per run. Re-run this
+    script with the same senders until counts reach 0 -- same-day searches are
+    reused and refreshed automatically.
 #>
 
 # -- Ensure Security & Compliance (IPPS) connection ---------------------------
@@ -52,158 +57,230 @@ if (-not (Get-Command New-ComplianceSearch -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# -- Prompt user for inputs ---------------------------------------------------
-$SenderEmail = Read-Host "Enter the sender email address to search for"
-if ([string]::IsNullOrWhiteSpace($SenderEmail)) {
-    Write-Error "Sender email cannot be empty."
-    exit 1
-}
-if ($SenderEmail -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-    Write-Error "'$SenderEmail' does not look like a valid email address."
-    exit 1
-}
+# -- Collect senders -----------------------------------------------------------
+$Senders = [System.Collections.Generic.List[string]]::new()
+Write-Host "`nEnter the sender email addresses to search for." -ForegroundColor Cyan
+Write-Host "One per line, or paste several separated by commas/spaces." -ForegroundColor DarkGray
+Write-Host "Enter 'n' (or leave blank) when you're done." -ForegroundColor DarkGray
 
-$SearchName = Read-Host "Enter a name for this eDiscovery search"
-if ([string]::IsNullOrWhiteSpace($SearchName)) {
-    Write-Error "Search name cannot be empty."
-    exit 1
-}
-
-# Quote the value in the KQL to avoid tokenization surprises, then confirm it.
-$Query = 'From:"{0}"' -f $SenderEmail
-Write-Host "Content match query: $Query" -ForegroundColor DarkGray
-
-# -- Create the compliance search ---------------------------------------------
-$Existing = Get-ComplianceSearch -Identity $SearchName -ErrorAction SilentlyContinue
-if ($Existing) {
-    Write-Warning "A compliance search named '$SearchName' already exists (names are tenant-wide)."
-    $Reuse = Read-Host "Reuse it (R), pick a new auto-suffixed name (N), or abort (A)? [R/N/A]"
-    switch -Regex ($Reuse) {
-        '^[Rr]' {
-            Write-Host "Reusing existing search '$SearchName'." -ForegroundColor Cyan
+while ($true) {
+    $Entry = Read-Host ("Sender {0}" -f ($Senders.Count + 1))
+    if ([string]::IsNullOrWhiteSpace($Entry) -or $Entry.Trim() -match '^(n|no|done)$') { break }
+    foreach ($Part in ($Entry -split '[,;\s]+')) {
+        $Addr = $Part.Trim().Trim('<', '>', '"', "'").ToLowerInvariant()
+        if (-not $Addr) { continue }
+        if ($Addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+            Write-Warning "'$Addr' does not look like a valid email address - skipped."
+            continue
         }
-        '^[Nn]' {
-            $SearchName = "{0}_{1}" -f $SearchName, (Get-Date -Format 'yyyyMMdd_HHmmss')
-            Write-Host "Using new search name '$SearchName'." -ForegroundColor Cyan
-            try {
-                New-ComplianceSearch -Name $SearchName -ExchangeLocation All -ContentMatchQuery $Query -ErrorAction Stop | Out-Null
-            } catch {
-                Write-Error "Failed to create compliance search: $_"
-                exit 1
-            }
-        }
-        default {
-            Write-Host "Aborted." -ForegroundColor DarkGray
-            exit 0
+        if ($Senders.Contains($Addr)) {
+            Write-Host "  (duplicate '$Addr' ignored)" -ForegroundColor DarkGray
+        } else {
+            $Senders.Add($Addr)
+            Write-Host "  + $Addr" -ForegroundColor DarkGray
         }
     }
-} else {
-    Write-Host "`nCreating compliance search '$SearchName'..." -ForegroundColor Cyan
+}
+
+if ($Senders.Count -eq 0) {
+    Write-Error "No senders entered. Exiting."
+    exit 1
+}
+
+$Today = Get-Date -Format 'yyyy-MM-dd'
+Write-Host "`n$($Senders.Count) sender(s) to search. Searches will be named '$Today <sender>'." -ForegroundColor Cyan
+
+# -- Create and start one search per sender ------------------------------------
+$Searches = foreach ($Sender in $Senders) {
+    [pscustomobject]@{
+        Sender    = $Sender
+        Name      = "$Today $Sender"
+        Query     = 'From:"{0}"' -f $Sender
+        Started   = $false
+        Done      = $false
+        Search    = $null
+        ItemCount = $null
+        Note      = $null
+        Purged    = $false
+    }
+}
+
+foreach ($Entry in $Searches) {
+    $Existing = Get-ComplianceSearch -Identity $Entry.Name -ErrorAction SilentlyContinue
+    if ($Existing) {
+        Write-Host "'$($Entry.Name)' already exists - reusing it and refreshing results." -ForegroundColor DarkGray
+        try {
+            Set-ComplianceSearch -Identity $Entry.Name -ContentMatchQuery $Entry.Query -ErrorAction Stop
+        } catch {
+            Write-Warning "Could not update query on existing search '$($Entry.Name)': $_"
+        }
+    } else {
+        Write-Host "Creating '$($Entry.Name)'..." -ForegroundColor Cyan
+        try {
+            New-ComplianceSearch -Name $Entry.Name -ExchangeLocation All -ContentMatchQuery $Entry.Query -ErrorAction Stop | Out-Null
+        } catch {
+            Write-Warning "Failed to create search for $($Entry.Sender): $_"
+            $Entry.Note = "create failed"
+            continue
+        }
+    }
     try {
-        New-ComplianceSearch -Name $SearchName -ExchangeLocation All -ContentMatchQuery $Query -ErrorAction Stop | Out-Null
+        Start-ComplianceSearch -Identity $Entry.Name -ErrorAction Stop
+        $Entry.Started = $true
     } catch {
-        Write-Error "Failed to create compliance search: $_"
-        exit 1
+        # A search that is already running is fine to poll.
+        if ($_ -match 'already|in progress') {
+            $Entry.Started = $true
+        } else {
+            Write-Warning "Failed to start search for $($Entry.Sender): $_"
+            $Entry.Note = "start failed"
+        }
     }
 }
 
-# -- Start the search ---------------------------------------------------------
-Write-Host "Starting compliance search..." -ForegroundColor Cyan
-try {
-    Start-ComplianceSearch -Identity $SearchName -ErrorAction Stop
-} catch {
-    Write-Error "Failed to start compliance search: $_"
+$Running = @($Searches | Where-Object Started)
+if ($Running.Count -eq 0) {
+    Write-Error "No searches could be started. Exiting."
     exit 1
 }
 
-# -- Poll until the search completes ------------------------------------------
-Write-Host "Waiting for search to complete" -NoNewline
-$Deadline = (Get-Date).AddMinutes(30)
-do {
-    Start-Sleep -Seconds 5
-    Write-Host "." -NoNewline
-    try {
-        $Search = Get-ComplianceSearch -Identity $SearchName -ErrorAction Stop
-    } catch {
-        Write-Host ""
-        Write-Error "Lost connection while polling the search: $_"
-        exit 1
-    }
+# -- Poll until all searches complete ------------------------------------------
+Write-Host "`nWaiting for $($Running.Count) search(es) to complete..."
+$Deadline = (Get-Date).AddMinutes(60)
+while ($true) {
+    $Remaining = @($Running | Where-Object { -not $_.Done })
+    if ($Remaining.Count -eq 0) { break }
     if ((Get-Date) -gt $Deadline) {
         Write-Host ""
-        Write-Error "Search did not complete within 30 minutes (last status: $($Search.Status)). Exiting."
-        exit 1
+        Write-Warning "Timed out after 60 minutes; $($Remaining.Count) search(es) still running will be skipped."
+        foreach ($Entry in $Remaining) { $Entry.Note = "timed out" }
+        break
     }
-} while ($Search.Status -notin @("Completed", "Failed"))
-
+    Start-Sleep -Seconds 10
+    foreach ($Entry in $Remaining) {
+        try {
+            $s = Get-ComplianceSearch -Identity $Entry.Name -ErrorAction Stop
+        } catch {
+            continue   # transient failure; retry on the next pass
+        }
+        if ($s.Status -in @('Completed', 'Failed')) {
+            $Entry.Done   = $true
+            $Entry.Search = $s
+            if ($s.Status -eq 'Failed') { $Entry.Note = 'search failed' }
+        }
+    }
+    $DoneCount = @($Running | Where-Object Done).Count
+    Write-Host ("`r  {0}/{1} complete " -f $DoneCount, $Running.Count) -NoNewline
+}
 Write-Host ""
 
-if ($Search.Status -ne "Completed") {
-    Write-Error "Search ended with status '$($Search.Status)'. Exiting."
-    exit 1
-}
-
-# -- Let expensive properties (Items/SuccessResults) settle -------------------
+# -- Let expensive properties (Items/SuccessResults) settle, then count --------
 # Items can momentarily read 0 right after Status flips to Completed.
-for ($i = 0; $i -lt 6; $i++) {
-    $Search = Get-ComplianceSearch -Identity $SearchName -ErrorAction SilentlyContinue
-    if ($Search.SuccessResults -and $null -ne $Search.Items) { break }
-    Start-Sleep -Seconds 5
+foreach ($Entry in ($Running | Where-Object { $_.Done -and $_.Search.Status -eq 'Completed' })) {
+    for ($i = 0; $i -lt 6; $i++) {
+        $s = Get-ComplianceSearch -Identity $Entry.Name -ErrorAction SilentlyContinue
+        if ($s -and $s.SuccessResults -and $null -ne $s.Items) { break }
+        Start-Sleep -Seconds 5
+    }
+    if ($s) { $Entry.Search = $s }
+
+    # SuccessResults lists an "Item count" per location; sum them as a
+    # cross-check against the Items property (which can lag after completion).
+    $Parsed = 0
+    foreach ($m in [regex]::Matches([string]$Entry.Search.SuccessResults, 'Item count:\s*(\d+)')) {
+        $Parsed += [int]$m.Groups[1].Value
+    }
+    $Entry.ItemCount = [Math]::Max([int]$Entry.Search.Items, $Parsed)
 }
 
-# Cross-check Items against the count parsed from SuccessResults.
-$ParsedItems = 0
-if ($Search.SuccessResults -match 'Item count:\s*(\d+)') { $ParsedItems = [int]$Matches[1] }
-$ItemCount = [Math]::Max([int]$Search.Items, $ParsedItems)
-
-# -- Display results ----------------------------------------------------------
+# -- Display summary ------------------------------------------------------------
 Write-Host "`n-- Search Results ---------------------------------------------------" -ForegroundColor Green
-$Search | Format-List Name, Status, Items, Size, ContentMatchQuery
-Write-Host "---------------------------------------------------------------------`n" -ForegroundColor Green
+$Searches |
+    Select-Object @{n = 'Search'; e = { $_.Name } },
+                  @{n = 'Items';  e = { if ($null -ne $_.ItemCount) { $_.ItemCount } else { '-' } } },
+                  @{n = 'Size';   e = { $_.Search.Size } },
+                  @{n = 'Status'; e = { if ($_.Note) { $_.Note } elseif ($_.Search) { $_.Search.Status } else { 'not started' } } } |
+    Format-Table -AutoSize
+Write-Host "---------------------------------------------------------------------" -ForegroundColor Green
 
-# -- Export results to CSV in the user's Downloads folder ---------------------
+# -- Export combined results CSV to the user's Downloads folder -----------------
 $ProfilePath = $env:USERPROFILE
 if ([string]::IsNullOrWhiteSpace($ProfilePath)) { $ProfilePath = [Environment]::GetFolderPath('UserProfile') }
 $DownloadsPath = [System.IO.Path]::Combine($ProfilePath, "Downloads")
 if (-not (Test-Path $DownloadsPath)) {
     New-Item -ItemType Directory -Force -Path $DownloadsPath | Out-Null
 }
-
-$SafeName = $SearchName
-foreach ($c in [System.IO.Path]::GetInvalidFileNameChars()) { $SafeName = $SafeName.Replace($c, '_') }
-$CsvPath = [System.IO.Path]::Combine($DownloadsPath, "$SafeName.csv")
+$CsvPath = [System.IO.Path]::Combine($DownloadsPath, "$Today eDiscovery Results.csv")
 
 try {
-    $Search | Select-Object Name, Status, Items, Size, ContentMatchQuery, CreatedTime, LastModifiedTime |
+    $Searches |
+        Select-Object @{n = 'SearchName'; e = { $_.Name } },
+                      Sender,
+                      @{n = 'Items';  e = { $_.ItemCount } },
+                      @{n = 'Size';   e = { $_.Search.Size } },
+                      @{n = 'Status'; e = { if ($_.Note) { $_.Note } elseif ($_.Search) { $_.Search.Status } else { 'not started' } } },
+                      Query,
+                      @{n = 'CreatedTime';      e = { $_.Search.CreatedTime } },
+                      @{n = 'LastModifiedTime'; e = { $_.Search.LastModifiedTime } } |
         Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8 -ErrorAction Stop
     Write-Host "Results exported to: $CsvPath" -ForegroundColor Yellow
 } catch {
     Write-Warning "Failed to export CSV to '$CsvPath': $_"
 }
 
-# -- Offer soft purge ---------------------------------------------------------
-if ($ItemCount -eq 0) {
-    Write-Host "No items found - skipping purge option." -ForegroundColor DarkGray
+# -- Offer soft purge per search --------------------------------------------------
+$Purgeable = @($Searches | Where-Object { $_.Done -and $_.Search -and $_.Search.Status -eq 'Completed' -and $_.ItemCount -gt 0 })
+if ($Purgeable.Count -eq 0) {
+    Write-Host "`nNo searches returned items - nothing to purge." -ForegroundColor DarkGray
     exit 0
 }
 
 Write-Host "`nNOTE: A soft purge removes a MAXIMUM of 10 items PER MAILBOX per run." -ForegroundColor Yellow
-Write-Host "      If any sender sent more than 10 items to a mailbox, you must re-run" -ForegroundColor Yellow
-Write-Host "      the search + purge until the item count reaches 0." -ForegroundColor Yellow
+Write-Host "      Re-run this script with the same senders until counts reach 0" -ForegroundColor Yellow
+Write-Host "      (same-day searches are reused and refreshed automatically).`n" -ForegroundColor Yellow
 
-$PurgeChoice = Read-Host "Found $ItemCount item(s). Perform a soft purge? [y/N]"
-
-if ($PurgeChoice -match '^[Yy]$') {
-    Write-Host "`nInitiating soft purge..." -ForegroundColor Cyan
-    try {
-        New-ComplianceSearchAction -SearchName $SearchName -Purge -PurgeType SoftDelete -Confirm:$false -ErrorAction Stop | Out-Null
-        Write-Host "Soft purge action submitted (up to 10 items/mailbox this run)." -ForegroundColor Green
-        Write-Host "Monitor progress with: Get-ComplianceSearchAction -Identity '${SearchName}_Purge' | Format-List" -ForegroundColor DarkGray
-        Write-Host "Re-run this script if the search still returns items afterward." -ForegroundColor DarkGray
-    } catch {
-        Write-Error "Failed to initiate soft purge: $_"
-        exit 1
+foreach ($Entry in $Searches) {
+    if (-not $Entry.Done -or -not $Entry.Search -or $Entry.Search.Status -ne 'Completed') {
+        $Reason = if ($Entry.Note) { $Entry.Note } else { 'not completed' }
+        Write-Host "$($Entry.Name) - skipped ($Reason)." -ForegroundColor DarkGray
+        continue
     }
-} else {
-    Write-Host "Purge skipped." -ForegroundColor DarkGray
+    if ($Entry.ItemCount -eq 0) {
+        Write-Host "$($Entry.Name) - 0 found, nothing to purge." -ForegroundColor DarkGray
+        continue
+    }
+
+    $Choice = Read-Host "$($Entry.Name) - $($Entry.ItemCount) found. Soft purge? [y/N]"
+    if ($Choice -notmatch '^[Yy]') {
+        Write-Host "  Purge skipped." -ForegroundColor DarkGray
+        continue
+    }
+
+    # A previous run leaves a "<name>_Purge" action behind, which blocks a new
+    # purge of the same search until it is removed.
+    $OldAction = Get-ComplianceSearchAction -Identity "$($Entry.Name)_Purge" -ErrorAction SilentlyContinue
+    if ($OldAction) {
+        try {
+            Remove-ComplianceSearchAction -Identity "$($Entry.Name)_Purge" -Confirm:$false -ErrorAction Stop
+        } catch {
+            Write-Warning "  Could not remove the previous purge action for '$($Entry.Name)': $_"
+            continue
+        }
+    }
+
+    try {
+        New-ComplianceSearchAction -SearchName $Entry.Name -Purge -PurgeType SoftDelete -Confirm:$false -ErrorAction Stop | Out-Null
+        $Entry.Purged = $true
+        Write-Host "  Soft purge submitted (up to 10 items/mailbox this run)." -ForegroundColor Green
+    } catch {
+        Write-Warning "  Failed to initiate soft purge: $_"
+    }
+}
+
+# -- Recap -----------------------------------------------------------------------
+$PurgedCount = @($Searches | Where-Object Purged).Count
+Write-Host "`n$PurgedCount purge action(s) submitted." -ForegroundColor Cyan
+if ($PurgedCount -gt 0) {
+    Write-Host "Monitor with: Get-ComplianceSearchAction | Where-Object { `$_.Name -like '*_Purge' } | Format-Table Name, Status" -ForegroundColor DarkGray
+    Write-Host "Re-run this script with the same senders to purge remaining items until counts reach 0." -ForegroundColor DarkGray
 }
