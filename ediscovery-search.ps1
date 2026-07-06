@@ -1,21 +1,19 @@
-#Requires -Modules ExchangeOnlineManagement
-
 <#
 .SYNOPSIS
     Batch eDiscovery compliance searches (one per sender) with per-search soft purge.
 
 .DESCRIPTION
     Connects to Security & Compliance PowerShell, collects a list of sender
-    addresses, creates and runs one ComplianceSearch per sender (named
-    "YYYY-MM-DD <sender>"), shows a summary of item counts, exports a combined
-    CSV to the user's Downloads folder, then offers a SoftDelete purge for each
-    search individually.
+    addresses (or @domains), creates and runs one ComplianceSearch per sender
+    (named "YYYY-MM-DD <sender>"), shows a summary of item counts, exports a
+    combined CSV to the user's Downloads folder, then offers a SoftDelete purge
+    for each search individually.
 
 .NOTES
     The *-ComplianceSearch cmdlets are Security & Compliance (Microsoft Purview)
     cmdlets, NOT Exchange Online. They require Connect-IPPSSession, and since the
     2025 enforcement (MC1131771) also require -EnableSearchOnlySession, which
-    needs ExchangeOnlineManagement v3.9.0+.
+    needs ExchangeOnlineManagement v3.9.0+ (installed below if missing).
 
     A soft purge removes at most 10 items per mailbox per run, and purged items
     move to Recoverable Items, WHICH SEARCHES STILL COUNT. Re-run this script
@@ -24,6 +22,26 @@
     are reused and refreshed automatically, and the previous run's counts are
     read back from the CSV so each prompt shows the change since last run.
 #>
+
+# Flushes stale console input (e.g. leftover pasted lines) so it cannot answer
+# the prompt, then requires an exact y/yes.
+function Confirm-Choice([string]$Prompt) {
+    try { $Host.UI.RawUI.FlushInputBuffer() } catch { }
+    return (Read-Host $Prompt).Trim() -in @('y', 'yes')
+}
+
+# Returns $null when the session can run eDiscovery cmdlets, else the error text.
+# A session opened WITHOUT -EnableSearchOnlySession imports the cmdlets but
+# fails at invocation (MC1131771), and no connection property reveals
+# search-only mode -- an invocation probe is the only reliable check.
+function Test-EDiscoveryCmdlets {
+    try {
+        $null = Get-ComplianceSearch -ErrorAction Stop
+        return $null
+    } catch {
+        return "$_"
+    }
+}
 
 # -- Ensure Security & Compliance (IPPS) connection ---------------------------
 $MinModuleVersion = [version]'3.9.0'
@@ -40,15 +58,11 @@ $ComplianceConnection = Get-ConnectionInformation -ErrorAction SilentlyContinue 
     Where-Object { $_.ConnectionUri -like '*compliance.protection.outlook.com*' -and $_.State -eq 'Connected' } |
     Select-Object -First 1
 
-# A session opened WITHOUT -EnableSearchOnlySession imports the eDiscovery
-# cmdlets but fails at invocation (MC1131771), and no connection property
-# reveals search-only mode -- so probe before trusting an existing session.
 $ProbeOk = $false
 if ($ComplianceConnection) {
-    try {
-        $null = Get-ComplianceSearch -ErrorAction Stop
+    if ($null -eq (Test-EDiscoveryCmdlets)) {
         $ProbeOk = $true
-    } catch {
+    } else {
         Write-Host "Existing compliance session cannot run eDiscovery cmdlets - reconnecting..." -ForegroundColor Yellow
         try {
             Disconnect-ExchangeOnline -ConnectionId $ComplianceConnection.ConnectionId -Confirm:$false -ErrorAction SilentlyContinue
@@ -76,13 +90,12 @@ if (-not (Get-Command New-ComplianceSearch -ErrorAction SilentlyContinue)) {
     exit 1
 }
 if (-not $ProbeOk) {
-    try {
-        $null = Get-ComplianceSearch -ErrorAction Stop
-    } catch {
-        if ("$_" -match 'EnableSearchOnlySession') {
+    $ProbeError = Test-EDiscoveryCmdlets
+    if ($ProbeError) {
+        if ($ProbeError -match 'EnableSearchOnlySession') {
             Write-Error "This session still cannot run eDiscovery cmdlets. Open a NEW PowerShell window and re-run this script."
         } else {
-            Write-Error "eDiscovery cmdlet probe failed: $_"
+            Write-Error "eDiscovery cmdlet probe failed: $ProbeError"
         }
         exit 1
     }
@@ -97,37 +110,34 @@ Write-Host "Enter 'n' (or leave blank) when you're done." -ForegroundColor DarkG
 
 while ($true) {
     $Entry = Read-Host ("Sender {0}" -f ($Senders.Count + 1))
-    if ([string]::IsNullOrWhiteSpace($Entry) -or $Entry.Trim() -match '^(n|no|done)$') { break }
+    if ([string]::IsNullOrWhiteSpace($Entry) -or $Entry.Trim() -in @('n', 'no', 'done')) { break }
     foreach ($Part in ($Entry -split '[,;\s]+')) {
         $Addr = $Part.Trim().Trim('<', '>', '"', "'").ToLowerInvariant()
         if (-not $Addr) { continue }
-        # '*@domain.com' or '@domain.com' means the whole domain. Microsoft's
-        # eDiscovery docs: specify "@contoso.com" in From to match everyone in
-        # the domain. (A leading * wildcard is not valid KQL.)
+
+        # Normalize to a canonical token: '*@domain.com' / '@domain.com' means
+        # the whole domain (Microsoft's eDiscovery docs: specify "@contoso.com"
+        # in From to match everyone in the domain; a leading * is not valid KQL).
         if ($Addr -match '^\*?@(.+)$') {
-            $Domain = $Matches[1]
-            if ($Domain -notmatch '^[^@\s]+\.[^@\s]+$') {
+            if ($Matches[1] -notmatch '^[^@\s]+\.[^@\s]+$') {
                 Write-Warning "'$Addr' does not look like a valid domain - skipped."
                 continue
             }
-            $DomainToken = "@$Domain"
-            if ($Senders.Contains($DomainToken)) {
-                Write-Host "  (duplicate '$DomainToken' ignored)" -ForegroundColor DarkGray
-            } else {
-                $Senders.Add($DomainToken)
-                Write-Host "  + $DomainToken (entire domain)" -ForegroundColor DarkGray
-            }
-            continue
-        }
-        if ($Addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+            $Token  = "@$($Matches[1])"
+            $Suffix = ' (entire domain)'
+        } elseif ($Addr -match '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+            $Token  = $Addr
+            $Suffix = ''
+        } else {
             Write-Warning "'$Addr' does not look like a valid email address - skipped."
             continue
         }
-        if ($Senders.Contains($Addr)) {
-            Write-Host "  (duplicate '$Addr' ignored)" -ForegroundColor DarkGray
+
+        if ($Senders.Contains($Token)) {
+            Write-Host "  (duplicate '$Token' ignored)" -ForegroundColor DarkGray
         } else {
-            $Senders.Add($Addr)
-            Write-Host "  + $Addr" -ForegroundColor DarkGray
+            $Senders.Add($Token)
+            Write-Host "  + $Token$Suffix" -ForegroundColor DarkGray
         }
     }
 }
@@ -143,9 +153,7 @@ $Today = Get-Date -Format 'yyyy-MM-dd'
 # line is caught before any searches are created.
 Write-Host "`nCollected $($Senders.Count) sender(s):" -ForegroundColor Cyan
 $Senders | ForEach-Object { Write-Host "  $_" }
-try { $Host.UI.RawUI.FlushInputBuffer() } catch { }
-$Confirm = Read-Host "Create $($Senders.Count) search(es) named '$Today <sender>'? [y/N]"
-if ($Confirm.Trim() -notin @('y', 'yes')) {
+if (-not (Confirm-Choice "Create $($Senders.Count) search(es) named '$Today <sender>'? [y/N]")) {
     Write-Host "Aborted." -ForegroundColor DarkGray
     exit 0
 }
@@ -161,13 +169,21 @@ $Searches = foreach ($Sender in $Senders) {
         Search    = $null
         ItemCount = $null
         Note      = $null
+        Status    = $null
         Purged    = $false
     }
 }
 
+# One listing call instead of one existence check per sender.
+$ExistingNames = @{}
+try {
+    foreach ($cs in (Get-ComplianceSearch -ErrorAction Stop)) { $ExistingNames[$cs.Name] = $true }
+} catch {
+    Write-Warning "Could not list existing searches (duplicates will fail at create): $_"
+}
+
 foreach ($Entry in $Searches) {
-    $Existing = Get-ComplianceSearch -Identity $Entry.Name -ErrorAction SilentlyContinue
-    if ($Existing) {
+    if ($ExistingNames.ContainsKey($Entry.Name)) {
         Write-Host "'$($Entry.Name)' already exists - reusing it and refreshing results." -ForegroundColor DarkGray
         try {
             Set-ComplianceSearch -Identity $Entry.Name -ContentMatchQuery $Entry.Query -ErrorAction Stop
@@ -205,6 +221,8 @@ if ($Running.Count -eq 0) {
 }
 
 # -- Poll until all searches complete ------------------------------------------
+# One listing call per pass covers every pending search (a bulk listing carries
+# Status but not the expensive Items/SuccessResults -- those come later).
 Write-Host "`nWaiting for $($Running.Count) search(es) to complete..."
 $Deadline = (Get-Date).AddMinutes(60)
 while ($true) {
@@ -217,13 +235,15 @@ while ($true) {
         break
     }
     Start-Sleep -Seconds 10
+    $ByName = @{}
+    try {
+        foreach ($cs in (Get-ComplianceSearch -ErrorAction Stop)) { $ByName[$cs.Name] = $cs }
+    } catch {
+        continue   # transient failure; retry on the next pass
+    }
     foreach ($Entry in $Remaining) {
-        try {
-            $s = Get-ComplianceSearch -Identity $Entry.Name -ErrorAction Stop
-        } catch {
-            continue   # transient failure; retry on the next pass
-        }
-        if ($s.Status -in @('Completed', 'Failed')) {
+        $s = $ByName[$Entry.Name]
+        if ($s -and $s.Status -in @('Completed', 'Failed')) {
             $Entry.Done   = $true
             $Entry.Search = $s
             if ($s.Status -eq 'Failed') { $Entry.Note = 'search failed' }
@@ -234,45 +254,53 @@ while ($true) {
 }
 Write-Host ""
 
-# -- Let expensive properties (Items/SuccessResults) settle, then count --------
-# Items can momentarily read 0 right after Status flips to Completed.
+# -- Fetch item counts (Items/SuccessResults need a per-identity fetch and can
+#    momentarily read empty right after completion) ----------------------------
+# Round-robin so the settle sleeps are shared across all searches instead of
+# paid per search.
+$Unsettled = [System.Collections.Generic.List[object]]::new()
 foreach ($Entry in ($Running | Where-Object { $_.Done -and $_.Search.Status -eq 'Completed' })) {
-    $s = $null
-    $Settled = $false
-    for ($i = 0; $i -lt 6; $i++) {
+    $Unsettled.Add($Entry)
+}
+for ($Round = 0; $Round -lt 6 -and $Unsettled.Count -gt 0; $Round++) {
+    if ($Round -gt 0) { Start-Sleep -Seconds 5 }
+    foreach ($Entry in @($Unsettled)) {
         try {
             $s = Get-ComplianceSearch -Identity $Entry.Name -ErrorAction Stop
         } catch {
-            $s = $null   # a dropped session must not leak the previous sender's object
+            continue   # transient failure; retry next round
         }
-        if ($s -and $s.SuccessResults -and $null -ne $s.Items) { $Settled = $true; break }
-        Start-Sleep -Seconds 5
+        if ($s.SuccessResults -and $null -ne $s.Items) {
+            $Entry.Search = $s
+            # SuccessResults lists an "Item count" per location; sum them as a
+            # cross-check against the Items property.
+            $Parsed = 0
+            foreach ($m in [regex]::Matches([string]$s.SuccessResults, 'Item count:\s*(\d+)')) {
+                $Parsed += [int]$m.Groups[1].Value
+            }
+            $Entry.ItemCount = [Math]::Max([int]$s.Items, $Parsed)
+            $null = $Unsettled.Remove($Entry)
+        }
     }
-    if ($s) { $Entry.Search = $s }
+}
+foreach ($Entry in $Unsettled) {
+    Write-Warning "'$($Entry.Name)': item count never settled; count unknown - re-run to refresh."
+    $Entry.Note = 'count unsettled'
+}
 
-    if (-not $Settled -and $null -eq $Entry.Search.Items -and -not $Entry.Search.SuccessResults) {
-        Write-Warning "'$($Entry.Name)': item count never settled; count unknown - re-run to refresh."
-        $Entry.Note = 'count unsettled'
-        continue   # leave ItemCount $null so the summary shows '-'
-    }
-
-    # SuccessResults lists an "Item count" per location; sum them as a
-    # cross-check against the Items property (which can lag after completion).
-    $Parsed = 0
-    foreach ($m in [regex]::Matches([string]$Entry.Search.SuccessResults, 'Item count:\s*(\d+)')) {
-        $Parsed += [int]$m.Groups[1].Value
-    }
-    $Entry.ItemCount = [Math]::Max([int]$Entry.Search.Items, $Parsed)
+# Derive the display/CSV status once per entry.
+foreach ($Entry in $Searches) {
+    $Entry.Status = if ($Entry.Note) { $Entry.Note }
+                    elseif ($Entry.Search) { $Entry.Search.Status }
+                    else { 'not started' }
 }
 
 # -- Load the previous run's counts (if any) for comparison ---------------------
-$ProfilePath = $env:USERPROFILE
-if ([string]::IsNullOrWhiteSpace($ProfilePath)) { $ProfilePath = [Environment]::GetFolderPath('UserProfile') }
-$DownloadsPath = [System.IO.Path]::Combine($ProfilePath, "Downloads")
+$DownloadsPath = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Downloads'
 if (-not (Test-Path $DownloadsPath)) {
     New-Item -ItemType Directory -Force -Path $DownloadsPath | Out-Null
 }
-$CsvPath = [System.IO.Path]::Combine($DownloadsPath, "$Today eDiscovery Results.csv")
+$CsvPath = Join-Path $DownloadsPath "$Today eDiscovery Results.csv"
 
 $PrevCounts = @{}
 if (Test-Path $CsvPath) {
@@ -286,25 +314,24 @@ if (Test-Path $CsvPath) {
     }
 }
 
-# -- Display summary ------------------------------------------------------------
+# -- Display summary and export CSV ----------------------------------------------
 Write-Host "`n-- Search Results ---------------------------------------------------" -ForegroundColor Green
 $Searches |
-    Select-Object @{n = 'Search';   e = { $_.Name } },
-                  @{n = 'Items';    e = { if ($null -ne $_.ItemCount) { $_.ItemCount } else { '-' } } },
-                  @{n = 'LastRun';  e = { if ($PrevCounts.ContainsKey($_.Name)) { $PrevCounts[$_.Name] } else { '-' } } },
-                  @{n = 'Size';     e = { $_.Search.Size } },
-                  @{n = 'Status';   e = { if ($_.Note) { $_.Note } elseif ($_.Search) { $_.Search.Status } else { 'not started' } } } |
+    Select-Object @{n = 'Search';  e = { $_.Name } },
+                  @{n = 'Items';   e = { if ($null -ne $_.ItemCount) { $_.ItemCount } else { '-' } } },
+                  @{n = 'LastRun'; e = { if ($PrevCounts.ContainsKey($_.Name)) { $PrevCounts[$_.Name] } else { '-' } } },
+                  @{n = 'Size';    e = { $_.Search.Size } },
+                  Status |
     Format-Table -AutoSize
 Write-Host "---------------------------------------------------------------------" -ForegroundColor Green
 
-# -- Export combined results CSV to the user's Downloads folder -----------------
 try {
     $Searches |
         Select-Object @{n = 'SearchName'; e = { $_.Name } },
                       Sender,
-                      @{n = 'Items';  e = { $_.ItemCount } },
-                      @{n = 'Size';   e = { $_.Search.Size } },
-                      @{n = 'Status'; e = { if ($_.Note) { $_.Note } elseif ($_.Search) { $_.Search.Status } else { 'not started' } } },
+                      @{n = 'Items'; e = { $_.ItemCount } },
+                      @{n = 'Size';  e = { $_.Search.Size } },
+                      Status,
                       Query,
                       @{n = 'CreatedTime';      e = { $_.Search.CreatedTime } },
                       @{n = 'LastModifiedTime'; e = { $_.Search.LastModifiedTime } } |
@@ -315,8 +342,9 @@ try {
 }
 
 # -- Offer soft purge per search --------------------------------------------------
-$Purgeable = @($Searches | Where-Object { $_.Done -and $_.Search -and $_.Search.Status -eq 'Completed' -and $_.ItemCount -gt 0 })
-if ($Purgeable.Count -eq 0) {
+# ItemCount is only ever set on completed, settled searches, so this one test
+# is the full eligibility predicate.
+if (-not @($Searches | Where-Object { $_.ItemCount -gt 0 })) {
     Write-Host "`nNo searches returned items - nothing to purge." -ForegroundColor DarkGray
     exit 0
 }
@@ -326,17 +354,9 @@ Write-Host "      and purged items move to Recoverable Items, which searches STI
 Write-Host "      count. Re-run until the count STOPS CHANGING - it will generally" -ForegroundColor Yellow
 Write-Host "      not reach 0 while purged items sit in Recoverable Items.`n" -ForegroundColor Yellow
 
-# Discard any leftover pasted lines so they cannot answer a purge prompt.
-try { $Host.UI.RawUI.FlushInputBuffer() } catch { }
-
 foreach ($Entry in $Searches) {
-    if (-not $Entry.Done -or -not $Entry.Search -or $Entry.Search.Status -ne 'Completed') {
-        $Reason = if ($Entry.Note) { $Entry.Note } else { 'not completed' }
-        Write-Host "$($Entry.Name) - skipped ($Reason)." -ForegroundColor DarkGray
-        continue
-    }
     if ($null -eq $Entry.ItemCount) {
-        Write-Host "$($Entry.Name) - item count unknown (never settled); skipping purge. Re-run to refresh." -ForegroundColor DarkGray
+        Write-Host "$($Entry.Name) - skipped ($($Entry.Status))." -ForegroundColor DarkGray
         continue
     }
     if ($Entry.ItemCount -eq 0) {
@@ -354,8 +374,7 @@ foreach ($Entry in $Searches) {
         }
     }
 
-    $Choice = Read-Host "$($Entry.Name) - $($Entry.ItemCount) found$PrevText. Soft purge? [y/N]"
-    if ($Choice.Trim() -notin @('y', 'yes')) {
+    if (-not (Confirm-Choice "$($Entry.Name) - $($Entry.ItemCount) found$PrevText. Soft purge? [y/N]")) {
         Write-Host "  Purge skipped." -ForegroundColor DarkGray
         continue
     }
