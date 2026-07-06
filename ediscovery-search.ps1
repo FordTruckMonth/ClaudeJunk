@@ -92,6 +92,7 @@ if (-not $ProbeOk) {
 $Senders = [System.Collections.Generic.List[string]]::new()
 Write-Host "`nEnter the sender email addresses to search for." -ForegroundColor Cyan
 Write-Host "One per line, or paste several separated by commas/spaces." -ForegroundColor DarkGray
+Write-Host "Use '*@domain.com' (or '@domain.com') to match every sender at a domain." -ForegroundColor DarkGray
 Write-Host "Enter 'n' (or leave blank) when you're done." -ForegroundColor DarkGray
 
 while ($true) {
@@ -100,6 +101,23 @@ while ($true) {
     foreach ($Part in ($Entry -split '[,;\s]+')) {
         $Addr = $Part.Trim().Trim('<', '>', '"', "'").ToLowerInvariant()
         if (-not $Addr) { continue }
+        # '*@domain.com' or '@domain.com' means the whole domain: KQL's From:
+        # property matches partial addresses, so From:"domain.com" catches
+        # every sender at that domain. (Leading wildcards are not valid KQL.)
+        if ($Addr -match '^\*?@(.+)$') {
+            $Domain = $Matches[1]
+            if ($Domain -notmatch '^[^@\s]+\.[^@\s]+$') {
+                Write-Warning "'$Addr' does not look like a valid domain - skipped."
+                continue
+            }
+            if ($Senders.Contains($Domain)) {
+                Write-Host "  (duplicate '$Domain' ignored)" -ForegroundColor DarkGray
+            } else {
+                $Senders.Add($Domain)
+                Write-Host "  + $Domain (entire domain)" -ForegroundColor DarkGray
+            }
+            continue
+        }
         if ($Addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
             Write-Warning "'$Addr' does not look like a valid email address - skipped."
             continue
