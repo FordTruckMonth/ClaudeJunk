@@ -23,6 +23,11 @@
 
 .EXAMPLE
     .\remove-pups.ps1 -Target WaveBrowser, CrystalPDF
+
+.NOTES
+    Exit codes: 0 = clean, or all found artifacts were removed;
+                1 = -DetectOnly run found artifacts;
+                2 = one or more removals failed (reboot and re-run).
 #>
 [CmdletBinding()]
 param(
@@ -53,8 +58,10 @@ $PupDefinitions = @(
         # co-installed with its sibling PUP WebNavigatorBrowser (same
         # Wavesor/Polarity lineage) — both are covered here.
         Name             = 'WaveBrowser'
-        ProcessPattern   = '(?i)^(wavebrowser|webnavigator)'
-        MatchPattern     = '(?i)(?<![a-z])wave[\s_-]*browser|wavesor|swupdatertaskuser|webnavigator|wavebrws'
+        # 'webnavigator' MUST keep its 'browser' suffix requirement: bare
+        # 'webnavigator' matches Siemens SIMATIC WinCC WebNavigator (SCADA).
+        ProcessPattern   = '(?i)^(wavebrowser|webnavigatorbrowser)'
+        MatchPattern     = '(?i)(?<![a-z])wave[\s_-]*browser|wavesor|swupdatertaskuser|webnavigator[\s_-]*browser|wavebrws'
         FolderNames      = @('WaveBrowser', 'Wavesor Software', 'WaveSor', 'WebNavigatorBrowser')
         ProfileRootFolderNames = @('WaveBrowser', 'Wavesor Software', 'WaveSor', 'WebNavigatorBrowser')
         MachineFolders   = @("$env:ProgramFiles\Wavesor", "${env:ProgramFiles(x86)}\Wavesor")
@@ -77,14 +84,19 @@ $PupDefinitions = @(
         # PUP.Optional.BlazerBrowser (Malwarebytes). Chromium PUP browser;
         # its browser process is new_blazer.exe / new_blazer_proxy.exe, its
         # updater blazer_updater.exe runs via the BlazerBrowserUpdateTask
-        # scheduled task. The lookahead requires 'browser' or a separator/end
-        # after 'blazer' so BlazeRush (steam game, 'blazeRUSH') can never
-        # match; the lookbehind rejects Trailblazer. Generic helpers
+        # scheduled task. MatchPattern never matches a standalone 'Blazer'
+        # word — a user's own C:\Users\<x>\Blazer folder, 'Chevy Blazer'
+        # shortcuts, trailblazer gems and BlazeRush all stay untouched.
+        # It requires browser context ('blazer...browser'), an attested
+        # compound (blazer_updater / blazer_installer / blazer.exe), or the
+        # install path shape \Blazer\Application / \Blazer\User Data. The
+        # bare install folder and registry keys are handled by the exact
+        # FolderNames / RegistrySubKeys lists instead. Generic helpers
         # (notification_helper.exe, setup.exe) are caught by their image
-        # path under ...\AppData\Local\Blazer\ instead of by name.
+        # path under ...\Blazer\Application\ instead of by name.
         Name             = 'Blazer'
         ProcessPattern   = '(?i)^(new_)?blazer(?=browser|[\s\\/._-]|$)'
-        MatchPattern     = '(?i)(?<![a-z])blazer(?=browser|[\s\\/._-]|$)'
+        MatchPattern     = '(?i)(?<![a-z])blazer[\s_-]*browser|(?<![a-z])blazer_(updater|installer)|[\\/]blazer[\\/](application|user data)|(?<![a-z])blazer\.exe$'
         FolderNames      = @('Blazer', 'BlazerBrowser', 'Blazer Browser')
         ProfileRootFolderNames = @()
         MachineFolders   = @()
@@ -92,11 +104,13 @@ $PupDefinitions = @(
             'Software\Blazer',
             'Software\BlazerBrowser',
             'Software\Classes\BlazerHTML',
+            'Software\Clients\StartMenuInternet\Blazer',
             'Software\Microsoft\Windows\CurrentVersion\App Paths\blazer.exe',
             'Software\Microsoft\Windows\CurrentVersion\Uninstall\Blazer',
             'Software\Microsoft\Windows\CurrentVersion\Uninstall\BlazerBrowser'
         )
         MachineRegistryKeys = @()
+        RegisteredAppNames  = @('Blazer')
     },
     @{
         # Crystal PDF is worse than a bundler PUP: 2025 vendor writeups
@@ -107,8 +121,11 @@ $PupDefinitions = @(
         # 'Crystal_updater' scheduled task running.
         Name             = 'CrystalPDF'
         ProcessPattern   = '(?i)^crystal[\s_-]*pdf'
-        MatchPattern     = '(?i)crystal[\s_-]*pdf|crystal_updater'  # 'pdf' token required — skips Crystal Reports / CrystalDiskInfo
-        FolderNames      = @('CrystalPDF', 'Crystal PDF', 'Temp\crys')
+        MatchPattern     = '(?i)crystal[\s_-]*pdf|(?<![a-z])crystal_updater(?![a-z])'  # 'pdf' token required — skips Crystal Reports / CrystalDiskInfo
+        FolderNames      = @('CrystalPDF', 'Crystal PDF')
+        # Temp\crys is only removed when the attested payload is inside it —
+        # the folder name alone is too generic to delete blind.
+        GuardedFolders   = @(@{ Path = 'Temp\crys'; Marker = 'CrystalPDF*.exe' })
         ProfileRootFolderNames = @()
         MachineFolders   = @()
         RegistrySubKeys  = @(
@@ -227,9 +244,16 @@ if ($killedAny -and -not $DetectOnly) { Start-Sleep -Seconds 2 }  # let file loc
 # 2. Scheduled tasks — match on task name, path, or action command line
 # ---------------------------------------------------------------------------
 Write-Section 'Scheduled Tasks'
+if (-not (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue)) {
+    Write-Warning 'ScheduledTasks module unavailable — task sweep skipped. WaveBrowser reinstalls via its tasks; remove them with schtasks.exe manually.'
+}
+# Blob fields are joined with ' | ' (never a bare space) so a pattern like
+# 'crystal[\s_-]*pdf' cannot match across two adjacent fields. Only the
+# action's executable path is included — matching on arguments would flag
+# legit tasks that merely mention a PUP path (e.g. a backup job).
 $allTasks = @(Get-ScheduledTask | ForEach-Object {
-    $actStr = ($_.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join ' | '
-    [PSCustomObject]@{ Task = $_; Blob = "$($_.TaskName) $($_.TaskPath) $actStr" }
+    $actStr = ($_.Actions | ForEach-Object { $_.Execute }) -join ' | '
+    [PSCustomObject]@{ Task = $_; Blob = "$($_.TaskName) | $($_.TaskPath) | $actStr" }
 })
 foreach ($pup in $activePups) {
     foreach ($t in @($allTasks | Where-Object { $_.Blob -match $pup.MatchPattern })) {
@@ -267,12 +291,26 @@ foreach ($userDir in $profileDirs) {
                 Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
             }.GetNewClosure()
         }
+        # Guarded folders: generic names only removed when the PUP's marker
+        # file is actually inside (e.g. Temp\crys must contain CrystalPDF*.exe)
+        foreach ($guard in @($pup.GuardedFolders)) {
+            if (-not $guard) { continue }
+            $path = Join-Path (Join-Path $userDir 'AppData\Local') $guard.Path
+            if ((Test-Path -LiteralPath $path) -and
+                @(Get-ChildItem -LiteralPath $path -Filter $guard.Marker -ErrorAction SilentlyContinue).Count -gt 0) {
+                Invoke-Action -Pup $pup.Name -Category 'Folder' -Item $path -Action {
+                    Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+                }.GetNewClosure()
+            }
+        }
     }
 }
 
-# Machine-wide install folders (rare — these PUPs are usually per-user)
+# Machine-wide install folders (rare — these PUPs are usually per-user).
+# The '^\\' filter drops drive-relative paths produced when an env var like
+# ProgramFiles(x86) is empty (32-bit Windows).
 foreach ($pup in $activePups) {
-    foreach ($path in @($pup.MachineFolders | Where-Object { $_ -and (Test-Path -LiteralPath $_) })) {
+    foreach ($path in @($pup.MachineFolders | Where-Object { $_ -and $_ -notmatch '^\\' -and (Test-Path -LiteralPath $_) })) {
         Invoke-Action -Pup $pup.Name -Category 'Folder' -Item $path -Action {
             Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
         }.GetNewClosure()
@@ -335,9 +373,10 @@ foreach ($pup in $activePups) {
         if (-not $key) { continue }
         foreach ($valueName in $key.GetValueNames()) {
             $valueData = $key.GetValue($valueName)
-            if ("$valueName $valueData" -match $pup.MatchPattern) {
+            if ("$valueName | $valueData" -match $pup.MatchPattern) {
                 Invoke-Action -Pup $pup.Name -Category 'RunValue' -Item "$runKey : $valueName = $valueData" -Action {
-                    Remove-ItemProperty -LiteralPath $runKey -Name $valueName -Force -ErrorAction Stop
+                    Remove-ItemProperty -LiteralPath $runKey `
+                        -Name ([Management.Automation.WildcardPattern]::Escape($valueName)) -Force -ErrorAction Stop
                 }.GetNewClosure()
             }
         }
@@ -354,7 +393,7 @@ foreach ($pup in $activePups) {
     foreach ($root in $uninstallRoots) {
         foreach ($entry in @(Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue)) {
             $props = Get-ItemProperty -LiteralPath $entry.PSPath -ErrorAction SilentlyContinue
-            $blob = @($entry.PSChildName, $props.DisplayName, $props.Publisher, $props.InstallLocation) -join ' '
+            $blob = @($entry.PSChildName, $props.DisplayName, $props.Publisher, $props.InstallLocation) -join ' | '
             if ($blob -match $pup.MatchPattern) {
                 $entryPath = $entry.PSPath
                 Invoke-Action -Pup $pup.Name -Category 'UninstallEntry' -Item ("{0} ({1})" -f $entry.PSChildName, $props.DisplayName) -Action {
@@ -368,8 +407,11 @@ foreach ($pup in $activePups) {
     #     browsers register under StartMenuInternet/RegisteredApplications
     #     and drop ProgId classes (WaveBrwsHTM*, WavesorSWUpdater.*), often
     #     with a random per-install hash suffix — so match subkey names by
-    #     pattern instead of listing them.
-    foreach ($hive in $userHives) {
+    #     pattern instead of listing them. HKLM is included when elevated
+    #     since browser registration can also land machine-wide.
+    $regHives = @($userHives)
+    if ($isAdmin) { $regHives += 'HKLM:' }
+    foreach ($hive in $regHives) {
         foreach ($scanRoot in @('Software\Clients\StartMenuInternet', 'Software\Classes')) {
             $rootPath = Join-Path $hive $scanRoot
             foreach ($sub in @(Get-ChildItem -LiteralPath $rootPath -ErrorAction SilentlyContinue |
@@ -383,9 +425,11 @@ foreach ($pup in $activePups) {
         $regAppsPath = Join-Path $hive 'Software\RegisteredApplications'
         $regApps = Get-Item -LiteralPath $regAppsPath -ErrorAction SilentlyContinue
         if ($regApps) {
-            foreach ($valueName in @($regApps.GetValueNames() | Where-Object { $_ -match $pup.MatchPattern })) {
+            foreach ($valueName in @($regApps.GetValueNames() |
+                     Where-Object { $_ -match $pup.MatchPattern -or $_ -in @($pup.RegisteredAppNames) })) {
                 Invoke-Action -Pup $pup.Name -Category 'RegistryValue' -Item "$regAppsPath : $valueName" -Action {
-                    Remove-ItemProperty -LiteralPath $regAppsPath -Name $valueName -Force -ErrorAction Stop
+                    Remove-ItemProperty -LiteralPath $regAppsPath `
+                        -Name ([Management.Automation.WildcardPattern]::Escape($valueName)) -Force -ErrorAction Stop
                 }.GetNewClosure()
             }
         }
@@ -399,12 +443,15 @@ $appxPackages = @(
     if ($isAdmin) { Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue }
     else          { Get-AppxPackage -ErrorAction SilentlyContinue }
 )
+# Remove-AppxPackage -AllUsers only exists on Win10 1709+; probe for it.
+$removeAppxCmd = Get-Command Remove-AppxPackage -ErrorAction SilentlyContinue
+$appxAllUsers  = $isAdmin -and $removeAppxCmd -and $removeAppxCmd.Parameters.ContainsKey('AllUsers')
 foreach ($pup in $activePups) {
     foreach ($pkg in @($appxPackages | Where-Object { $_.Name -match $pup.MatchPattern })) {
         $pkgFullName = $pkg.PackageFullName
         Invoke-Action -Pup $pup.Name -Category 'AppxPackage' -Item $pkgFullName -Action {
-            if ($isAdmin) { Remove-AppxPackage -Package $pkgFullName -AllUsers -ErrorAction Stop }
-            else          { Remove-AppxPackage -Package $pkgFullName -ErrorAction Stop }
+            if ($appxAllUsers) { Remove-AppxPackage -Package $pkgFullName -AllUsers -ErrorAction Stop }
+            else               { Remove-AppxPackage -Package $pkgFullName -ErrorAction Stop }
         }.GetNewClosure()
     }
 }
@@ -423,12 +470,25 @@ $shortcutRoots = @(
     "$env:ProgramData\Microsoft\Windows\Start Menu"
 ) | Where-Object { Test-Path -LiteralPath $_ }
 
+# A shortcut is removed when its resolved target is a PUP path, or when its
+# name matches and the target can't be read. A matching NAME with a clean,
+# readable target is left alone (e.g. a user's own 'Crystal PDF invoices.lnk'
+# pointing at a documents folder).
+$wsShell = $null
+try { $wsShell = New-Object -ComObject WScript.Shell } catch { }
 foreach ($root in $shortcutRoots) {
     $links = @(Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse -Force -ErrorAction SilentlyContinue)
     foreach ($pup in $activePups) {
-        foreach ($lnk in @($links | Where-Object { $_.Name -match $pup.MatchPattern })) {
+        foreach ($lnk in $links) {
+            $target = ''
+            if ($wsShell) {
+                try { $target = $wsShell.CreateShortcut($lnk.FullName).TargetPath } catch { }
+            }
+            $nameHit   = $lnk.Name -match $pup.MatchPattern
+            $targetHit = $target -and ($target -match $pup.MatchPattern)
+            if (-not ($targetHit -or ($nameHit -and -not $target))) { continue }
             $lnkPath = $lnk.FullName
-            Invoke-Action -Pup $pup.Name -Category 'Shortcut' -Item $lnkPath -Action {
+            Invoke-Action -Pup $pup.Name -Category 'Shortcut' -Item "$lnkPath -> $target" -Action {
                 Remove-Item -LiteralPath $lnkPath -Force -ErrorAction Stop
             }.GetNewClosure()
         }
@@ -464,5 +524,6 @@ if ($failed.Count -gt 0) {
 }
 if ($DetectOnly) {
     Write-Host "`nDetect-only run — nothing was removed. Re-run without -DetectOnly to remove." -ForegroundColor Yellow
+    exit 1
 }
-exit 1
+exit 0
