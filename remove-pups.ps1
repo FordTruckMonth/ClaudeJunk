@@ -1,22 +1,36 @@
 <#
 .SYNOPSIS
-    Detects and removes known PUPs: Wave Browser, Blazer Browser, and Crystal PDF.
+    Detects and removes known PUPs: Wave Browser, Blazer Browser, Crystal PDF,
+    and (opt-in) Shift Browser.
 
 .DESCRIPTION
     Sweeps running processes, scheduled tasks, per-user install folders
     (AppData / profile root), leftover installers in Downloads, registry
-    persistence (Run/RunOnce values, vendor keys, uninstall entries), and
-    Desktop / Start Menu shortcuts for each targeted PUP, then removes what
-    it finds.
+    persistence (Run/RunOnce values, vendor keys, uninstall entries,
+    browser registration, ProgId/COM classes), and Desktop / Start Menu
+    shortcuts for each targeted PUP, then removes what it finds.
 
     Run elevated to clean every profile on the machine; a non-elevated run
-    is limited to the current user's profile and hive.
+    is limited to the current user's profile and hive. Designed to run
+    non-interactively under SYSTEM (e.g. a SentinelOne remote-ops script):
+    no prompts, -Force/-Confirm:$false throughout, and machine-readable
+    exit codes (see .NOTES).
+
+    Shift Browser is OPT-IN: it is excluded from the default sweep and only
+    runs when you name it in -Target. This is deliberate — Shift Browser is
+    code-signed by the same publisher (Shift Technologies, Inc. / Redbrick)
+    as a legitimate paid workspace browser and installs to identical paths,
+    so no signature or path test can tell an unwanted bundled install apart
+    from one a user chose. Only target it where you know it is unwanted.
 
 .PARAMETER DetectOnly
-    Report findings without removing anything (dry run).
+    Report findings without removing anything (dry run). Recommended for the
+    first pass on any new machine (e.g. the closed test system).
 
 .PARAMETER Target
-    Subset of PUPs to process. Default: all three.
+    PUPs to process. Defaults to the three always-unwanted PUPs
+    (WaveBrowser, Blazer, CrystalPDF). Pass -Target ShiftBrowser (alone or
+    alongside others) to opt into Shift Browser removal.
 
 .EXAMPLE
     .\remove-pups.ps1 -DetectOnly
@@ -24,17 +38,25 @@
 .EXAMPLE
     .\remove-pups.ps1 -Target WaveBrowser, CrystalPDF
 
+.EXAMPLE
+    # Closed-system test, then removal, of Shift Browser:
+    .\remove-pups.ps1 -Target ShiftBrowser -DetectOnly
+    .\remove-pups.ps1 -Target ShiftBrowser
+
 .NOTES
     Exit codes: 0 = clean, or all found artifacts were removed;
                 1 = -DetectOnly run found artifacts;
                 2 = one or more removals failed (reboot and re-run).
+    Under SentinelOne, a non-zero exit surfaces as a failed script run;
+    exit 2 therefore flags machines that need a reboot + re-run, which is
+    the intended signal. Deploy via powershell.exe -ExecutionPolicy Bypass.
 #>
 [CmdletBinding()]
 param(
     [switch]$DetectOnly,
 
-    [ValidateSet('WaveBrowser', 'Blazer', 'CrystalPDF')]
-    [string[]]$Target = @('WaveBrowser', 'Blazer', 'CrystalPDF')
+    [ValidateSet('WaveBrowser', 'Blazer', 'CrystalPDF', 'ShiftBrowser')]
+    [string[]]$Target = @('WaveBrowser', 'Blazer', 'CrystalPDF')  # ShiftBrowser is opt-in
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -136,6 +158,38 @@ $PupDefinitions = @(
         )
         MachineRegistryKeys = @()
         PostRemovalNote  = 'Crystal PDF is a credential-stealing trojan, not just adware. Treat this machine as compromised: reset the user''s passwords, revoke active browser sessions, and review sign-in logs.'
+    },
+    @{
+        # Shift Browser (Redbrick / Shift Technologies, Inc.). OPT-IN only —
+        # excluded from the default -Target because it is code-signed by the
+        # same publisher as, and installs to the same paths as, a legitimate
+        # paid product. There is NO reliable on-disk or signature test that
+        # separates an unwanted bundled install from a deliberate one, so we
+        # never match a bare 'shift': every pattern is anchored to the exact
+        # install-path shape (\Shift\chromium\, \ShiftData\), the exact
+        # process names, the 'Shift Technologies' publisher string, or the
+        # campaign's specific installer/dropper filenames. That keeps
+        # redshift.exe, openshift, ShiftN, shift-qt, and Teams 'Shifts' safe.
+        # There is no attested product called "Shift Printer"; the printer/
+        # PDF angle is just the fake-download-button lure (recipes_*/pdf_*).
+        Name             = 'ShiftBrowser'
+        ProcessPattern   = '(?i)^(shift|shift_pwa_launcher)$'
+        MatchPattern     = '(?i)[\\/]shift[\\/]chromium[\\/]|[\\/]shiftdata([\\/]|$)|(?<![a-z])shift technologies|shift-v?[0-9][0-9.]*-(production\.)?web\.exe|^recipes(_[a-z0-9]+)?\.exe$|^pdf_[a-z0-9]+\.exe$'
+        FolderNames      = @('Shift', 'ShiftData')
+        ProfileRootFolderNames = @()
+        MachineFolders   = @()
+        RegistrySubKeys  = @(
+            'Software\Shift',
+            'Software\Shift Technologies',
+            'Software\Microsoft\Windows\CurrentVersion\Uninstall\Shift'
+        )
+        MachineRegistryKeys = @(
+            'HKLM:\SOFTWARE\Shift',
+            'HKLM:\SOFTWARE\Shift Technologies',
+            'HKLM:\SOFTWARE\WOW6432Node\Shift Technologies'
+        )
+        RegisteredAppNames  = @('Shift')
+        PostRemovalNote  = 'Shift Browser is code-signed by Shift Technologies, Inc. and shares its install paths with a legitimate paid product. You targeted it explicitly; if it was present on a machine where a user installed the paid Shift on purpose, this removed it. Verify on the closed test system before fleet rollout.'
     }
 )
 
