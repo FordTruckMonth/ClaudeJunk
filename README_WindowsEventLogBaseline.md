@@ -5,6 +5,9 @@ Automates the Windows event logging configuration merged from two sources:
 - **MA** — Malware Archaeology [Windows Logging Cheat Sheet](https://www.malwarearchaeology.com/cheat-sheets), Feb 2019 ver 2.3 (Win 7 – Server 2019)
 - **Huntress** — [Collecting Microsoft Windows Event Logs (WEL)](https://support.huntress.io/hc/en-us/articles/36005287194259-Collecting-Microsoft-Windows-Event-Logs-WEL) (Huntress Managed SIEM device configuration guide)
 
+Prefer to configure this by hand (GPO / Local Security Policy / Event Viewer)? See the
+step-by-step [manual configuration guide](README_WindowsEventLogBaseline_Manual.md).
+
 **Merge rule:** wherever the Huntress table marks a subcategory *No Auditing* because "all
 process activity is covered by the Huntress EDR" (or defers to other telemetry), the Malware
 Archaeology recommendation is used instead — the point of this baseline is that the *logs
