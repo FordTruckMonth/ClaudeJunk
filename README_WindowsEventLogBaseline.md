@@ -1,71 +1,77 @@
-# Windows Event Log Baseline (`Set-WindowsEventLogBaseline.ps1`)
+# Windows Event Log Baseline GPO (`New-WindowsEventLogBaselineGpo.ps1`)
 
-Automates the Windows event logging configuration merged from two sources:
+Creates and links an Active Directory GPO implementing the Windows event logging baseline
+merged from two sources:
 
 - **MA** — Malware Archaeology [Windows Logging Cheat Sheet](https://www.malwarearchaeology.com/cheat-sheets), Feb 2019 ver 2.3 (Win 7 – Server 2019)
 - **Huntress** — [Collecting Microsoft Windows Event Logs (WEL)](https://support.huntress.io/hc/en-us/articles/36005287194259-Collecting-Microsoft-Windows-Event-Logs-WEL) (Huntress Managed SIEM device configuration guide)
 
-Prefer to configure this by hand (GPO / Local Security Policy / Event Viewer)? See the
-step-by-step [manual configuration guide](README_WindowsEventLogBaseline_Manual.md).
+**Scope:** the GPO carries the Advanced Audit Policy, the event log sizes/retention, and
+the "force audit policy subcategory settings" security option — nothing else. For the
+remaining baseline items (PowerShell logging, command line in 4688, extra channels) and
+for non-domain machines, see the step-by-step
+[manual configuration guide](README_WindowsEventLogBaseline_Manual.md).
 
 **Merge rule:** wherever the Huntress table marks a subcategory *No Auditing* because "all
-process activity is covered by the Huntress EDR" (or defers to other telemetry), the Malware
-Archaeology recommendation is used instead — the point of this baseline is that the *logs
-themselves* capture the activity, EDR or not. Everywhere else the newer Huntress value wins,
-since it corrects several MA-era settings against subcategories that generate no events or
-only exist for deprecated features.
+process activity is covered by the Huntress EDR" (or defers to other telemetry), the
+Malware Archaeology recommendation is used instead — the point of this baseline is that
+the *logs themselves* capture the activity, EDR or not. Everywhere else the newer
+Huntress value wins, since it corrects several MA-era settings against subcategories that
+generate no events or only exist for deprecated features.
 
 ## Usage
 
-Run elevated (Windows PowerShell 5.1+):
+Run as a user with GPO-creation rights (e.g. Domain Admins) on a DC or an admin
+workstation with RSAT (GroupPolicy + ActiveDirectory modules):
 
 ```powershell
-# Preview every change without applying
-.\Set-WindowsEventLogBaseline.ps1 -WhatIf
+# Preview without touching AD or SYSVOL
+.\New-WindowsEventLogBaselineGpo.ps1 -WhatIf
 
-# Apply the baseline
-.\Set-WindowsEventLogBaseline.ps1
+# Create the GPO and link it at the domain root (includes DCs)
+.\New-WindowsEventLogBaselineGpo.ps1 -LinkTo 'DC=corp,DC=example,DC=com'
 
-# Bigger Security log (MA guidance when file/registry/WFP auditing are on),
-# plus WFP Success auditing and the resulting policy printed at the end
-.\Set-WindowsEventLogBaseline.ps1 -SecurityLogSizeKB 1024000 -EnableWfpSuccessAuditing -ShowResultingPolicy
+# Custom name, multiple OU links, bigger Security log, WFP success auditing
+.\New-WindowsEventLogBaselineGpo.ps1 -GpoName 'SEC - Logging Baseline' `
+    -LinkTo 'OU=Workstations,DC=corp,DC=example,DC=com','OU=Servers,DC=corp,DC=example,DC=com' `
+    -SecurityLogSizeKB 1024000 -EnableWfpSuccessAuditing
 ```
 
 | Parameter | Default | Purpose |
 |---|---|---|
-| `-SecurityLogSizeKB` | `512000` | Security log max size (both sources). MA: `1024000` if File/Registry/WFP/Process auditing all enabled. |
+| `-GpoName` | `Windows Event Log Baseline` | GPO to create or update. |
+| `-LinkTo` | *(unlinked)* | One or more DNs to link the GPO to (domain root or OUs). |
+| `-SecurityLogSizeKB` | `512000` | Security log max size (both sources). MA: `1024000` if SACL/WFP auditing is on. |
 | `-AppSystemLogSizeKB` | `256000` | Application and System log max size (MA). |
-| `-PowerShellLogSizeKB` | `256000` | Classic *Windows PowerShell* log and `Microsoft-Windows-PowerShell/Operational` (MA). |
-| `-Capi2LogSizeKB` | `102400` | Size for `Microsoft-Windows-CAPI2/Operational`, which the script enables (MA — watch event 81). |
-| `-EnableProcessTermination` | off | Audit Process Termination = Success (MA Advanced sheet territory; Huntress: EDR-covered). |
+| `-EnableProcessTermination` | off | Audit Process Termination = Success (off in both base documents). |
 | `-EnableWfpSuccessAuditing` | off | Add Success to Filtering Platform Connection (5156) per MA. ~9–10k events/hour/system. |
 | `-SkipSaclAuditing` | off | Follow Huntress instead of MA for File System / Registry auditing (see table). |
-| `-EnableCertificationServicesAuditing` | auto | Certification Services S+F. Auto-enabled when the `CertSvc` service is present (Huntress note). |
-| `-SkipDisables` | off | Only enable auditing; never turn a subcategory off. |
-| `-SkipPowerShellLogging` | off | Don't set Module/ScriptBlock logging registry values. |
-| `-EnableDnsDebugLogging` | off | Windows DNS Server role only: MA DNS debug packet logging to `%SystemRoot%\System32\Dns\Dns.log`. |
-| `-ShowResultingPolicy` | off | Print `auditpol /get /category:*` when done. |
+| `-EnableCertificationServicesAuditing` | off | Certification Services S+F — only when the GPO's scope includes AD CS servers. |
+| `-Force` | off | Overwrite audit/security-template settings already present in the target GPO. |
 
-Subcategories are set by **GUID**, so the script works on non-English Windows.
+## How the GPO is built
 
-## What it configures
+Advanced Audit Policy in a GPO is not registry-based, so the script builds the GPO the
+same way GPMC does:
 
-1. **Force Advanced Audit Policy** — `HKLM\SYSTEM\CurrentControlSet\Control\Lsa\SCENoApplyLegacyAuditPolicy = 1`
-   (MA: *"Audit: Force audit policy subcategory settings" = ENABLE*).
-2. **Advanced Audit Policy** — the merged table below via `auditpol.exe`.
-3. **Log sizes/retention** — via `wevtutil sl` (overwrite as needed / `/rt:false`), and enables the
-   Task Scheduler (`129` created / `141` deleted) and CAPI2 (`81` failed trust) operational channels.
-4. **Command line in 4688** — `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit\ProcessCreationIncludeCmdLine_Enabled = 1`.
-5. **PowerShell logging** (Huntress + MA agree) — under both
-   `HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell` and the `Wow6432Node` mirror:
-   `ModuleLogging\EnableModuleLogging = 1`, `ModuleLogging\ModuleNames\* = *`,
-   `ScriptBlockLogging\EnableScriptBlockLogging = 1`.
-6. **Optional DNS Server debug logging** — MA "ENABLE: DNS LOGS" (queries/responses,
-   send/receive, UDP/TCP, updates).
+1. `New-GPO` (or reuse by name — refuses to overwrite existing audit/security settings
+   without `-Force`).
+2. Writes **`Machine\Microsoft\Windows NT\Audit\audit.csv`** into the GPO's SYSVOL
+   folder — the full merged audit table, all 59 subcategories. "No Auditing" rows are
+   written explicitly (Setting Value `0`) so stale audit policy gets overridden, per the
+   MA warning about unconfigured rows.
+3. Writes **`Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf`** —
+   `SCENoApplyLegacyAuditPolicy=4,1` (*Audit: Force audit policy subcategory settings* =
+   Enabled) plus `[Security Log]`/`[Application Log]`/`[System Log]` sections with
+   `MaximumLogSize` (KB) and `AuditLogRetentionPeriod=0` (*Overwrite events as needed*).
+4. Registers the required client-side extensions in `gPCMachineExtensionNames`
+   (Security CSE `{827D319E-…}` and Advanced Audit Policy CSE `{F3CCC681-…}`) and bumps
+   the GPO version (AD `versionNumber` + `GPT.ini`) so clients pick up the change.
+5. Links the GPO to each `-LinkTo` target (skipping existing links).
 
 ## Merged Advanced Audit Policy table
 
-*Applied* = what the script sets by default. **Bold** rows are where the two sources disagree.
+*Applied* = what the GPO sets by default. **Bold** rows are where the two sources disagree.
 
 | Category / Subcategory | MA Feb 2019 | Huntress | Applied | Why |
 |---|---|---|---|---|
@@ -106,7 +112,7 @@ Subcategories are set by **GUID**, so the script works on non-English Windows.
 | **Object Access** | | | | |
 | **Application Generated** | S+F | No Audit | No Audit | Huntress — deprecated Authorization Manager only |
 | Central Access Policy Staging | No Audit | No Audit | No Audit | Agree |
-| **Certification Services** | S+F | S+F *if AD CS* | Auto² | Huntress — S+F when `CertSvc` present |
+| **Certification Services** | S+F | S+F *if AD CS* | Off² | Huntress — enable for GPOs scoped to AD CS servers |
 | **Detailed File Share** | S | S+F | S+F | Huntress (5145 — can be loud on busy file servers/DCs) |
 | File Share | S+F | S+F | S+F | Agree |
 | **File System** | **S** | No Audit (SACL-dependent) | **S** | **MA per merge rule** — emits nothing until SACLs exist (see MA File Auditing Cheat Sheet), so zero-noise; `-SkipSaclAuditing` reverts |
@@ -136,52 +142,52 @@ Subcategories are set by **GUID**, so the script works on non-English Windows.
 | System Integrity | S+F | S+F | S+F | Agree |
 
 ¹ Both base documents leave Process Termination off; use `-EnableProcessTermination` if you want 4689 correlation without relying on EDR telemetry.
-² Auto-detected: S+F when the AD CS service exists, else No Audit. Force with `-EnableCertificationServicesAuditing`.
+² Use `-EnableCertificationServicesAuditing` for a GPO whose scope includes AD CS servers.
 ³ Not literally an "EDR-covered" row — Huntress says success-connection value "is available through other mechanisms" — so the noisy MA setting is opt-in rather than default.
 
 `(WA)` = MA's pointer to their *Windows Advanced Logging Cheat Sheet*. `(N)` = MA noise marker.
 
-## Log sizes and additional channels
+## Log sizes set by the GPO
 
 | Log | Size | Retention | Source |
 |---|---|---|---|
-| Security | 512,000 KB (param; MA allows 1,024,000) | Overwrite as needed | Both |
-| Application / System | 256,000 KB | Overwrite as needed | MA |
-| Windows PowerShell (classic) | 256,000 KB | Overwrite as needed | MA |
-| Microsoft-Windows-PowerShell/Operational | 256,000 KB | default | MA |
-| Microsoft-Windows-TaskScheduler/Operational | default | enabled | MA (harvest 129/141) |
-| Microsoft-Windows-CAPI2/Operational | 102,400 KB | enabled | MA (harvest 81) |
+| Security | 512,000 KB (param; MA allows 1,024,000) | Overwrite events as needed | Both |
+| Application / System | 256,000 KB | Overwrite events as needed | MA |
 
-## Doing it via Group Policy instead
+## Deliberately out of scope
 
-On domain-joined fleets, set the same values in GPO — **GPO always wins over local/agent
-settings** (Huntress will raise an escalation if a GPO fights its baseline):
+These baseline items are **not** in the GPO this script builds — apply them per the
+[manual guide](README_WindowsEventLogBaseline_Manual.md) (steps 4–7) or a separate GPO:
 
-- Audit policy: `Computer Configuration > Policies > Windows Settings > Security Settings > Advanced Audit Policy Configuration`
-- Log size/retention: `... > Security Settings > Event Log` (Security: max size `512000`, retention *Overwrite events as needed*)
-- Force subcategory override: `... > Security Settings > Local Policies > Security Options > "Audit: Force audit policy subcategory settings..." = Enabled`
-- PowerShell logging: `Computer Configuration > Policies > Administrative Templates > Windows Components > Windows PowerShell` → *Turn on Module Logging* (`*`) and *Turn on PowerShell Script Block Logging*
-- Command line in 4688: `... > Administrative Templates > System > Audit Process Creation > Include command line in process creation events = Enabled`
+- **Command line in 4688** (`Administrative Templates > System > Audit Process Creation`),
+  or as a one-liner against this same GPO:
+  `Set-GPRegistryValue -Name 'Windows Event Log Baseline' -Key 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit' -ValueName ProcessCreationIncludeCmdLine_Enabled -Type DWord -Value 1`
+- **PowerShell Module/ScriptBlock logging** (`Administrative Templates > Windows Components > Windows PowerShell`)
+- **Task Scheduler / CAPI2 operational channels** and their sizes (per-machine `wevtutil`)
+- **PowerShell log sizes** (classic + Operational — per-machine, Event Viewer or `wevtutil`)
+- **DNS server debug logging** (DNS Manager, DNS servers only)
 
 Huntress-specific notes:
 
-- The Huntress agent auto-applies its Advanced Audit Policy on SIEM-enabled endpoints; this
-  script's audit table matches it except for the deliberate MA overrides above, so expect the
-  agent and script to coexist quietly. Keep any GPO aligned to avoid escalation noise.
+- The Huntress agent auto-applies its Advanced Audit Policy on SIEM-enabled endpoints;
+  this GPO matches it except for the deliberate MA overrides above. **GPO always wins**
+  over agent/local settings — keeping the GPO aligned to this table avoids Huntress
+  escalation noise.
 - Huntress sets the NTDS diagnostics keys (`Field Engineering = 5`, search thresholds) on
   SIEM-enabled domain controllers itself — the script doesn't touch those.
-- Huntress does **not** set Security log size/retention or PowerShell logging; those must come
-  from this script or GPO.
+- Huntress does **not** set Security log size/retention; that's exactly what this GPO's
+  `GptTmpl.inf` covers.
 
 ## Verify
 
 ```powershell
-auditpol /get /category:*        # audit policy actually in effect
-wevtutil gl Security             # log size/retention
-Get-WinEvent -ListLog 'Microsoft-Windows-TaskScheduler/Operational','Microsoft-Windows-CAPI2/Operational' | Format-Table LogName, IsEnabled, MaximumSizeInBytes
+Get-GPOReport -Name 'Windows Event Log Baseline' -ReportType Html -Path .\baseline-gpo.html   # inspect settings
+gpupdate /force                  # on a client in scope
+auditpol /get /category:*        # should match the Applied column above
+wevtutil gl Security             # maxSize + retention
 ```
 
-Worth watching once collected (MA "HARVEST" highlights): 4688 (new process + command line),
-4624/4625 logon types, 4720/4724/4738 account changes, 4732 group membership, 7045/4697 new
-services, 4698 new scheduled task, 1102/104 log cleared, 4719 audit policy changed, 4657/4663
-registry/file writes (needs SACLs), 5156 WFP connections (if enabled).
+Worth watching once collected (MA "HARVEST" highlights): 4688 (new process), 4624/4625
+logon types, 4720/4724/4738 account changes, 4732 group membership, 7045/4697 new
+services, 4698 new scheduled task, 1102/104 log cleared, 4719 audit policy changed,
+4657/4663 registry/file writes (needs SACLs), 5156 WFP connections (if enabled).
