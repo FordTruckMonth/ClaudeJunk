@@ -1,222 +1,221 @@
-# Windows Event Log Baseline — Manual Configuration Guide
+# Windows Event Log Baseline — Manual Setup Guide
 
-Step-by-step instructions to apply the same baseline as `Set-WindowsEventLogBaseline.ps1`
-by hand, without running the script. Sources and merge logic are documented in
-[README_WindowsEventLogBaseline.md](README_WindowsEventLogBaseline.md) — this guide only
-covers *how* to click/type it in.
+How to apply the logging baseline by hand, without the script. Where the values come
+from (Malware Archaeology vs. Huntress) is covered in
+[README_WindowsEventLogBaseline.md](README_WindowsEventLogBaseline.md) — this guide is
+just the steps.
 
-Two ways to do everything below:
+**Pick your tool first:**
 
-- **Domain (preferred):** Group Policy Management (`gpmc.msc`) — create a GPO (e.g.
-  `SEC - Windows Logging Baseline`), link it to the OUs containing your
-  workstations/servers, and edit the paths shown. Settings apply on the next
-  `gpupdate /force` / refresh cycle. **GPO always overrides local settings.**
-- **Standalone / non-domain:** Local Group Policy Editor (`gpedit.msc`) or Local Security
-  Policy (`secpol.msc`) for the policy pieces, Event Viewer (`eventvwr.msc`) for log
-  sizes/channels. Home editions have no `gpedit.msc` — use the registry commands noted
-  inline instead.
+| Your situation | Use |
+|---|---|
+| Domain-joined fleet | Group Policy Management (`gpmc.msc`) — make one GPO, link it to your workstation/server OUs. **GPO always beats local settings.** |
+| Standalone machine | Local Group Policy Editor (`gpedit.msc`) + Event Viewer (`eventvwr.msc`) |
+| Windows Home (no gpedit) | The `reg add` / `wevtutil` commands shown in each step |
 
-All GPO paths below start at **Computer Configuration → Policies →** (in `gpedit.msc`
-there is no "Policies" node — start at Computer Configuration directly).
+All GPO paths below start at **Computer Configuration → Policies** (in `gpedit.msc`,
+skip the "Policies" node).
+
+**The whole job is six steps, plus two optional ones:**
+
+- [ ] 1. Set log sizes and retention
+- [ ] 2. Force Advanced Audit Policy (do this before step 3)
+- [ ] 3. Set the audit policy (the big one)
+- [ ] 4. Capture command lines in process events
+- [ ] 5. Turn on PowerShell logging
+- [ ] 6. Enable the Task Scheduler and CAPI2 logs
+- [ ] 7. *(Optional)* DNS server debug logging
+- [ ] 8. Verify
 
 ---
 
-## 1. Log sizes and retention
+## Step 1 — Set log sizes and retention
 
-**GPO:** `Windows Settings → Security Settings → Event Log`
+**Where:** `Windows Settings → Security Settings → Event Log` (GPO), or in Event Viewer:
+right-click each log → **Properties**.
 
-| Policy | Value |
-|---|---|
-| Maximum security log size | `512000` KB *(1024000 if you enable file/registry/WFP success auditing)* |
-| Retention method for security log | Overwrite events as needed |
-| Maximum application log size | `256000` KB |
-| Retention method for application log | Overwrite events as needed |
-| Maximum system log size | `256000` KB |
-| Retention method for system log | Overwrite events as needed |
+| Log | Max size (KB) | Retention |
+|---|---|---|
+| Security | **512000** | Overwrite events as needed |
+| Application | 256000 | Overwrite events as needed |
+| System | 256000 | Overwrite events as needed |
+| Windows PowerShell | 256000 | Overwrite events as needed |
+| Microsoft → Windows → PowerShell → Operational | 256000 | (default) |
 
-That GPO section only covers Application/Security/System. For the PowerShell logs, use
-Event Viewer (below) or, in newer templates: `Administrative Templates → Windows
-Components → Event Log Service → <log> → Specify the maximum log file size (KB)`.
+The GPO Event Log section only covers the first three — set the two PowerShell logs in
+Event Viewer (under *Applications and Services Logs*) or with `wevtutil`.
 
-**Event Viewer (standalone or for channels GPO doesn't cover):** right-click the log →
-**Properties** → set *Maximum log size (KB)* → select *Overwrite events as needed* → OK.
+> Bump Security to **1024000** KB if you later enable the noisy options in step 3
+> (file/registry SACL auditing, WFP success connections).
 
-| Log (Event Viewer location) | Size KB |
-|---|---|
-| Windows Logs → Security | 512000 |
-| Windows Logs → Application | 256000 |
-| Windows Logs → System | 256000 |
-| Applications and Services Logs → Windows PowerShell | 256000 |
-| Applications and Services Logs → Microsoft → Windows → PowerShell → Operational | 256000 |
+Command line (size is in **bytes** here): `wevtutil sl Security /ms:524288000 /rt:false`
 
-Command-line equivalent (elevated): `wevtutil sl Security /ms:524288000 /rt:false`
-(size is in **bytes** here; 524288000 = 512000 KB).
+## Step 2 — Force Advanced Audit Policy
 
-## 2. Force use of Advanced Audit Policy
+Without this switch, the old category-level audit settings can silently override
+everything you do in step 3. Flip it first.
 
-**GPO / secpol.msc:** `Windows Settings → Security Settings → Local Policies → Security
-Options` → **"Audit: Force audit policy subcategory settings (Windows Vista or later) to
-override audit policy category settings"** → **Enabled**.
+**Where:** `Windows Settings → Security Settings → Local Policies → Security Options`
 
-Registry equivalent:
+**Set:** *"Audit: Force audit policy subcategory settings (Windows Vista or later) to
+override audit policy category settings"* → **Enabled**
+
+Command line:
 `reg add "HKLM\SYSTEM\CurrentControlSet\Control\Lsa" /v SCENoApplyLegacyAuditPolicy /t REG_DWORD /d 1 /f`
 
-Do this first — without it, legacy category auditing can silently override everything in
-step 3.
+## Step 3 — Set the audit policy
 
-## 3. Advanced Audit Policy subcategories
+**Where:** `Windows Settings → Security Settings → Advanced Audit Policy Configuration →
+Audit Policies` (locally: `secpol.msc` → *Advanced Audit Policy Configuration*).
 
-**GPO:** `Windows Settings → Security Settings → Advanced Audit Policy Configuration →
-Audit Policies`
-**Local:** `secpol.msc → Advanced Audit Policy Configuration → System Audit Policies`
+For each subcategory: double-click it → tick **"Configure the following audit events"**
+→ tick the boxes for the setting shown → OK.
 
-For **every** row below: double-click the subcategory → tick **"Configure the following
-audit events"** → tick Success/Failure as shown → OK.
-
-> ⚠ Per the Malware Archaeology sheet: tick the *Configure* box **even on the
-> "No Auditing" rows** (with Success/Failure left unchecked). A configured-but-empty
-> setting enforces "no auditing"; an unconfigured one is ignored and whatever was there
-> before stays in effect. In a GPO, leaving rows blank that you meant to disable breaks
-> the intent of the baseline.
+> ⚠ **The "No Auditing" lists below still need clicks.** Tick *Configure* and leave both
+> boxes empty — that enforces "no auditing." If you skip the row entirely, it stays
+> whatever it was before, and the baseline isn't really applied.
 
 ### Account Logon
 
-| Subcategory | Success | Failure |
-|---|:-:|:-:|
-| Audit Credential Validation | ✔ | ✔ |
-| Audit Kerberos Authentication Service | ✔ | ✔ |
-| Audit Kerberos Service Ticket Operations | ✔ | ✔ |
-| Audit Other Account Logon Events | — | — |
+| Subcategory | Setting |
+|---|---|
+| Credential Validation | Success + Failure |
+| Kerberos Authentication Service | Success + Failure |
+| Kerberos Service Ticket Operations | Success + Failure |
+
+**No Auditing:** Other Account Logon Events
 
 ### Account Management
 
-| Subcategory | Success | Failure |
-|---|:-:|:-:|
-| Audit Application Group Management | — | — |
-| Audit Computer Account Management | ✔ | ✔ |
-| Audit Distribution Group Management | ✔ | ✔ |
-| Audit Other Account Management Events | ✔ | — |
-| Audit Security Group Management | ✔ | ✔ |
-| Audit User Account Management | ✔ | ✔ |
+| Subcategory | Setting |
+|---|---|
+| Computer Account Management | Success + Failure |
+| Distribution Group Management | Success + Failure |
+| Security Group Management | Success + Failure |
+| User Account Management | Success + Failure |
+| Other Account Management Events | Success only |
+
+**No Auditing:** Application Group Management
 
 ### Detailed Tracking
 
-| Subcategory | Success | Failure |
-|---|:-:|:-:|
-| Audit DPAPI Activity | — | — |
-| Audit PNP Activity | ✔ | — |
-| **Audit Process Creation** | ✔ | ✔ |
-| Audit Process Termination ¹ | — | — |
-| Audit RPC Events | — | — |
-| Audit Token Right Adjusted Events | — | — |
+| Subcategory | Setting |
+|---|---|
+| **Process Creation** | **Success + Failure** ← the 4688 events; the core of this baseline |
+| PNP Activity | Success only |
 
-¹ Optional: tick Success if you want 4689 process-exit correlation without relying on EDR
-telemetry (script switch `-EnableProcessTermination`).
+**No Auditing:** DPAPI Activity, Process Termination, RPC Events, Token Right Adjusted Events
 
-### DS Access (matters on Domain Controllers; harmless elsewhere)
+> Optional: set **Process Termination → Success** if you want process-exit (4689)
+> correlation without relying on EDR telemetry.
 
-| Subcategory | Success | Failure |
-|---|:-:|:-:|
-| Audit Detailed Directory Service Replication | — | — |
-| Audit Directory Service Access | ✔ | ✔ |
-| Audit Directory Service Changes | ✔ | — |
-| Audit Directory Service Replication | — | — |
+### DS Access — matters on Domain Controllers, harmless elsewhere
+
+| Subcategory | Setting |
+|---|---|
+| Directory Service Access | Success + Failure |
+| Directory Service Changes | Success only |
+
+**No Auditing:** Detailed Directory Service Replication, Directory Service Replication
 
 ### Logon/Logoff
 
-| Subcategory | Success | Failure |
-|---|:-:|:-:|
-| Audit Account Lockout | — | ✔ |
-| Audit User / Device Claims | — | — |
-| Audit Group Membership | — | — |
-| Audit IPsec Extended Mode | — | — |
-| Audit IPsec Main Mode | — | — |
-| Audit IPsec Quick Mode | — | — |
-| Audit Logoff | ✔ | — |
-| Audit Logon | ✔ | ✔ |
-| Audit Network Policy Server | ✔ | ✔ |
-| Audit Other Logon/Logoff Events | ✔ | ✔ |
-| Audit Special Logon | ✔ | — |
+| Subcategory | Setting |
+|---|---|
+| Logon | Success + Failure |
+| Logoff | Success only |
+| Account Lockout | Failure only |
+| Special Logon | Success only |
+| Network Policy Server | Success + Failure |
+| Other Logon/Logoff Events | Success + Failure |
+
+**No Auditing:** User/Device Claims, Group Membership, IPsec Extended Mode, IPsec Main Mode, IPsec Quick Mode
 
 ### Object Access
 
-| Subcategory | Success | Failure |
-|---|:-:|:-:|
-| Audit Application Generated | — | — |
-| Audit Central Access Policy Staging | — | — |
-| Audit Certification Services ² | — | — |
-| Audit Detailed File Share | ✔ | ✔ |
-| Audit File Share | ✔ | ✔ |
-| **Audit File System** ³ | ✔ | — |
-| Audit Filtering Platform Connection ⁴ | — | ✔ |
-| Audit Filtering Platform Packet Drop | — | — |
-| Audit Handle Manipulation | — | — |
-| Audit Kernel Object ⁵ | ✔ | ✔ |
-| Audit Other Object Access Events | ✔ | ✔ |
-| **Audit Registry** ³ | ✔ | — |
-| Audit Removable Storage | ✔ | ✔ |
-| Audit SAM | — | — |
+| Subcategory | Setting |
+|---|---|
+| File Share | Success + Failure |
+| Detailed File Share | Success + Failure |
+| File System | Success only *(silent until you add SACLs — see note)* |
+| Registry | Success only *(silent until you add SACLs — see note)* |
+| Kernel Object | Success + Failure |
+| Other Object Access Events | Success + Failure |
+| Removable Storage | Success + Failure |
+| Filtering Platform Connection | Failure only |
 
-² On AD CS servers (Certificate Services installed): Success ✔ Failure ✔.
-³ Emits nothing until you add SACLs to the folders/keys you care about (see the Malware
-Archaeology *Windows File Auditing* and *Windows Registry Auditing* cheat sheets), so
-enabling it is zero-noise until then.
-⁴ Optional: add Success per Malware Archaeology to log every permitted connection (event
-5156). Very noisy — ~9–10k events/hour/system — budget log size accordingly.
-⁵ Keep Security Options → *"Audit: Audit the access of global system objects"* **Disabled**
-(the default) or this becomes extremely noisy.
+**No Auditing:** Application Generated, Central Access Policy Staging, Certification
+Services, Filtering Platform Packet Drop, Handle Manipulation, SAM
+
+Notes for this category:
+
+- **File System / Registry** produce nothing until you put SACLs on the folders and keys
+  you care about (Malware Archaeology's *File Auditing* and *Registry Auditing* cheat
+  sheets tell you which). Enabling them now costs nothing and means the SACLs work the
+  moment you add them.
+- **Certification Services:** on an AD CS server, set Success + Failure instead.
+- **Filtering Platform Connection:** optionally add Success to log every allowed
+  connection (event 5156). Expect ~9–10k events/hour per machine — only with a big
+  Security log and a plan to collect it.
+- Keep Security Options → *"Audit: Audit the access of global system objects"*
+  **Disabled** (the default), or Kernel Object auditing gets extremely noisy.
 
 ### Policy Change
 
-| Subcategory | Success | Failure |
-|---|:-:|:-:|
-| Audit Audit Policy Change | ✔ | — |
-| Audit Authentication Policy Change | ✔ | — |
-| Audit Authorization Policy Change | ✔ | — |
-| Audit Filtering Platform Policy Change | ✔ | — |
-| Audit MPSSVC Rule-Level Policy Change | ✔ | ✔ |
-| Audit Other Policy Change Events | ✔ | ✔ |
+| Subcategory | Setting |
+|---|---|
+| Audit Policy Change | Success only |
+| Authentication Policy Change | Success only |
+| Authorization Policy Change | Success only |
+| Filtering Platform Policy Change | Success only |
+| MPSSVC Rule-Level Policy Change | Success + Failure |
+| Other Policy Change Events | Success + Failure |
 
 ### Privilege Use
 
-| Subcategory | Success | Failure |
-|---|:-:|:-:|
-| Audit Non Sensitive Privilege Use | — | — |
-| Audit Other Privilege Use Events | — | — |
-| Audit Sensitive Privilege Use | ✔ | ✔ |
+| Subcategory | Setting |
+|---|---|
+| Sensitive Privilege Use | Success + Failure |
+
+**No Auditing:** Non Sensitive Privilege Use, Other Privilege Use Events
 
 ### System
 
-| Subcategory | Success | Failure |
-|---|:-:|:-:|
-| Audit IPsec Driver | — | — |
-| Audit Other System Events | ✔ | ✔ |
-| Audit Security State Change | ✔ | — |
-| Audit Security System Extension | ✔ | — |
-| Audit System Integrity | ✔ | ✔ |
+| Subcategory | Setting |
+|---|---|
+| Security State Change | Success only |
+| Security System Extension | Success only |
+| System Integrity | Success + Failure |
+| Other System Events | Success + Failure |
 
-## 4. Command line in process creation events (4688)
+**No Auditing:** IPsec Driver
 
-**GPO/gpedit:** `Administrative Templates → System → Audit Process Creation` →
-**"Include command line in process creation events"** → **Enabled**.
+## Step 4 — Capture command lines in process events
 
-Registry equivalent (Home editions / one-off):
+Makes every 4688 event include the full command line — one of the highest-value settings
+in the whole baseline.
+
+**Where:** `Administrative Templates → System → Audit Process Creation`
+
+**Set:** *"Include command line in process creation events"* → **Enabled**
+
+Command line:
 `reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit" /v ProcessCreationIncludeCmdLine_Enabled /t REG_DWORD /d 1 /f`
 
-Note: command lines can contain secrets typed by admins (e.g. passwords passed as
-arguments) — treat the Security log as sensitive.
+> Command lines sometimes contain secrets admins typed (passwords as arguments). Treat
+> the Security log as sensitive data.
 
-## 5. PowerShell logging
+## Step 5 — Turn on PowerShell logging
 
-**GPO/gpedit:** `Administrative Templates → Windows Components → Windows PowerShell`
+**Where:** `Administrative Templates → Windows Components → Windows PowerShell`
 
-1. **Turn on Module Logging** → Enabled → click **Show...** next to Module Names → add a
-   single entry: `*`
+1. **Turn on Module Logging** → Enabled → click **Show...** next to *Module Names* → add
+   one entry: `*`
 2. **Turn on PowerShell Script Block Logging** → Enabled. Leave *"Log script block
-   invocation start / stop events"* unchecked (it roughly doubles volume for little value).
+   invocation start/stop events"* unchecked — it roughly doubles the volume for little
+   value.
 
-Registry equivalent (as documented by Huntress; on 64-bit systems set the same values
-under both `HKLM\SOFTWARE\Policies\...` and `HKLM\SOFTWARE\Wow6432Node\Policies\...`):
+Command line (on 64-bit Windows, repeat with `SOFTWARE\Wow6432Node\Policies\...`):
 
 ```bat
 reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging" /v EnableModuleLogging /t REG_DWORD /d 1 /f
@@ -224,50 +223,58 @@ reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging\Modul
 reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging" /v EnableScriptBlockLogging /t REG_DWORD /d 1 /f
 ```
 
-## 6. Enable additional logs
+## Step 6 — Enable the Task Scheduler and CAPI2 logs
 
-**Event Viewer → Applications and Services Logs → Microsoft → Windows →**
+**Where:** Event Viewer → *Applications and Services Logs → Microsoft → Windows*
 
-- **TaskScheduler → Operational** → right-click → **Enable Log**
-  (watch event 129 = task created, 141 = task deleted)
-- **CAPI2 → Operational** → right-click → **Enable Log**, then Properties → Maximum log
-  size = `102400` KB (watch event 81 = failed trust validation)
+| Log | Action | Worth watching |
+|---|---|---|
+| TaskScheduler → Operational | Right-click → **Enable Log** | 129 task created, 141 task deleted |
+| CAPI2 → Operational | Right-click → **Enable Log**, then Properties → max size **102400** KB | 81 failed trust validation |
 
-Command-line equivalent:
+Command line:
 
 ```bat
 wevtutil sl Microsoft-Windows-TaskScheduler/Operational /e:true
 wevtutil sl Microsoft-Windows-CAPI2/Operational /e:true /ms:104857600
 ```
 
-## 7. DNS debug logging (Windows DNS Server role only — optional)
+## Step 7 — (Optional) DNS server debug logging
 
-DNS Manager (`dnsmgmt.msc`) → right-click the server → **Properties** → **Debug Logging**
-tab → tick **"Log packets for debugging"**, then:
+Only on machines running the Windows DNS Server role.
 
-- Packet direction: **Outgoing** and **Incoming**
-- Transport protocol: **UDP** and **TCP**
-- Packet contents: **Queries/Transfers** and **Updates**
-- Packet type: **Request** and **Response**
+**Where:** DNS Manager (`dnsmgmt.msc`) → right-click the server → **Properties** →
+**Debug Logging** tab.
+
+Tick **"Log packets for debugging"**, then:
+
+- Packet direction: **Outgoing** + **Incoming**
+- Transport protocol: **UDP** + **TCP**
+- Packet contents: **Queries/Transfers** + **Updates**
+- Packet type: **Request** + **Response**
 - File path: `%SystemRoot%\System32\Dns\Dns.log`, with a sane max size
 
-DHCP server audit logging (`%windir%\System32\Dhcp`, event 10 = new lease) is on by
-default on Windows DHCP servers — nothing to enable, just collect it.
+DHCP servers need nothing — audit logging (`%windir%\System32\Dhcp`, event 10 = new
+lease) is already on by default; just collect it.
 
-## 8. Verify
+## Step 8 — Verify
 
 ```bat
-gpupdate /force                 (domain-joined, after GPO edits)
-auditpol /get /category:*       (every row should match the tables above)
-wevtutil gl Security            (maxSize + retention)
+gpupdate /force                 :: domain-joined, after GPO edits
+auditpol /get /category:*       :: should match the step 3 tables exactly
+wevtutil gl Security            :: maxSize and retention
 ```
 
-In Event Viewer, confirm 4688 events now show a populated *Process Command Line* field,
-and `Microsoft-Windows-PowerShell/Operational` shows 4103/4104 events after running any
-PowerShell.
+Then spot-check in Event Viewer:
 
-If Huntress is deployed: the agent applies the audit policy of step 3 automatically on
-SIEM-enabled endpoints and will raise an escalation if a GPO conflicts — keep the GPO
-matched to these tables. Steps 1, 4 and 5 (sizes/retention, 4688 command line,
-PowerShell logging) are **not** set by the agent and always need this manual/GPO
-configuration.
+- A new 4688 event shows a populated **Process Command Line** field (step 4 works)
+- `Microsoft-Windows-PowerShell/Operational` shows 4103/4104 events after running any
+  PowerShell (step 5 works)
+
+---
+
+**If Huntress is deployed:** the agent applies step 3's audit policy automatically on
+SIEM-enabled endpoints, and raises an escalation when a GPO conflicts with it — so keep
+your GPO matched to these tables. Steps 1, 4 and 5 (sizes/retention, command line in
+4688, PowerShell logging) are **never** set by the agent; they always need this manual or
+GPO configuration.
