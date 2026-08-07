@@ -1,0 +1,28 @@
+# Anna's Archive MCP server for Nous Research's Hermes Agent.
+#
+# Merge the `mcp_servers` block below into your ~/.hermes/config.yaml.
+# If your config already has an `mcp_servers:` key, add only the
+# `annas-archive:` entry underneath it (don't duplicate `mcp_servers:`).
+#
+# Notes:
+#   * Hermes launches stdio servers with ONLY the env vars listed here
+#     (it does not forward your full shell environment), so the keys must
+#     live in this block.
+#   * `command` must point at the annas-mcp binary. Use an absolute path,
+#     or a bare `annas-mcp` if it is on Hermes' PATH.
+#   * ANNAS_DOWNLOAD_PATH must be an ABSOLUTE path — the binary rejects
+#     relative paths.
+#   * ANNAS_SECRET_KEY is only required for downloads (needs an Anna's
+#     Archive donor API key). Searching works without it, but the binary
+#     still wants the var present, so keep a placeholder if you only search.
+
+mcp_servers:
+  annas-archive:
+    command: "annas-mcp"
+    args: ["mcp"]
+    env:
+      ANNAS_SECRET_KEY: "REPLACE_WITH_YOUR_ANNAS_DONOR_KEY"
+      ANNAS_DOWNLOAD_PATH: "/absolute/path/to/downloads"
+      # Optional mirror overrides:
+      ANNAS_BASE_URL: "annas-archive.gl"
+      # ANNAS_AUTO_BASE_URL: "true"   # auto-discover a live mirror via SLUM
