@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#
+# annas — wrapper around the annas-mcp CLI for the Hermes `annas-archive` skill.
+#
+# Resolves the binary (in order): $ANNAS_MCP_BIN, the skill's own bin/, then PATH.
+# Provides a sane default for ANNAS_DOWNLOAD_PATH so search works out of the box.
+# All arguments are passed straight through to annas-mcp, e.g.:
+#   annas book-search "query"
+#   annas book-download <hash> "Title.epub"
+#   annas article-search "10.1234/doi"
+#   annas article-download "10.1234/doi"
+
+set -euo pipefail
+
+SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Locate the annas-mcp binary.
+BIN="${ANNAS_MCP_BIN:-}"
+if [[ -z "$BIN" || ! -x "$BIN" ]]; then
+  if [[ -x "$SKILL_DIR/bin/annas-mcp" ]]; then
+    BIN="$SKILL_DIR/bin/annas-mcp"
+  else
+    BIN="$(command -v annas-mcp 2>/dev/null || true)"
+  fi
+fi
+if [[ -z "$BIN" || ! -x "$BIN" ]]; then
+  echo "annas-mcp: not found. Run this once to install it:" >&2
+  echo "  \"$SKILL_DIR/scripts/setup.sh\"" >&2
+  exit 127
+fi
+
+# Default download path (must be absolute) so downloads have a home if unset.
+export ANNAS_DOWNLOAD_PATH="${ANNAS_DOWNLOAD_PATH:-$HOME/Downloads/annas}"
+case "$ANNAS_DOWNLOAD_PATH" in
+  /*) : ;;
+  *) echo "ANNAS_DOWNLOAD_PATH must be absolute, got: $ANNAS_DOWNLOAD_PATH" >&2; exit 2 ;;
+esac
+mkdir -p "$ANNAS_DOWNLOAD_PATH"
+
+exec "$BIN" "$@"

@@ -1,6 +1,16 @@
 # ClaudeJunk
 
-Miscellaneous scripts and one-off tools. Full projects have been split into their own repos:
+Miscellaneous scripts and one-off tools.
+
+## Setups
+
+| Dir | Description |
+|---|---|
+| [hermes-annas-mcp](./hermes-annas-mcp) | Anna's Archive (`annas-mcp`) for Nous Research's Hermes Agent — a self-contained Hermes **skill** (`skills/annas-archive/`) plus an alternative MCP-server setup |
+
+## Split-out repos
+
+Full projects have been split into their own repos:
 
 | Repo | Description |
 |---|---|
