@@ -6,7 +6,7 @@ Miscellaneous scripts and one-off tools.
 
 | Dir | Description |
 |---|---|
-| [hermes-annas-mcp](./hermes-annas-mcp) | Wire the Anna's Archive MCP server (`annas-mcp`) into Nous Research's Hermes Agent — installer, config snippet, and docs |
+| [hermes-annas-mcp](./hermes-annas-mcp) | Anna's Archive (`annas-mcp`) for Nous Research's Hermes Agent — a self-contained Hermes **skill** (`skills/annas-archive/`) plus an alternative MCP-server setup |
 
 ## Split-out repos
 

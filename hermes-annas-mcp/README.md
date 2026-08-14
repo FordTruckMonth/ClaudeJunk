@@ -1,14 +1,74 @@
 # annas-mcp + Hermes Agent
 
-Wire the [Anna's Archive MCP server](https://github.com/iosifache/annas-mcp)
-(`annas-mcp`) into [Nous Research's Hermes Agent](https://github.com/NousResearch/hermes-agent)
-so you can search and download books and papers from inside a Hermes session.
+Search and download books and academic papers from
+[Anna's Archive](https://annas-archive.org) inside
+[Nous Research's Hermes Agent](https://github.com/NousResearch/hermes-agent),
+powered by [`annas-mcp`](https://github.com/iosifache/annas-mcp).
 
-Hermes loads MCP servers from `~/.hermes/config.yaml`. `annas-mcp` is a single
-Go binary that speaks MCP over stdio via its `mcp` subcommand, so Hermes just
-launches it as a local stdio server.
+There are two ways to wire this up — pick one:
 
-## Tools it exposes
+- **Option A — Hermes skill (recommended).** A self-contained skill in
+  [`skills/annas-archive/`](./skills/annas-archive/) that drives the `annas-mcp`
+  **CLI**. Drop it in `~/.hermes/skills/`, and it activates automatically and as
+  the `/annas-archive` slash command. No `config.yaml` edits. Your donor key is
+  sourced from the environment via the skill's `required_environment_variables`
+  (Hermes prompts for it) — nothing secret is stored in the repo.
+- **Option B — MCP server.** Register `annas-mcp mcp` as a stdio MCP server in
+  `~/.hermes/config.yaml` so `book_search` / `book_download` / etc. appear as
+  first-class tools. See [MCP server setup](#option-b--mcp-server-setup) below.
+
+---
+
+## Option A — Hermes skill (recommended)
+
+**Install:** copy the skill into your Hermes skills dir and install the binary once.
+
+```bash
+# from this directory
+cp -r skills/annas-archive ~/.hermes/skills/annas-archive
+~/.hermes/skills/annas-archive/scripts/setup.sh   # builds via `go install` or downloads a release
+```
+
+Then in a Hermes session run `/reload-mcp` (or restart), and use it:
+
+```
+/annas-archive find and download the epub of "designing data-intensive applications"
+```
+
+or just ask naturally — the skill activates on book/paper requests.
+
+**Providing your key (you manage it, not the repo):** the skill declares
+`ANNAS_SECRET_KEY` (and optional `ANNAS_DOWNLOAD_PATH`) as
+`required_environment_variables`, so Hermes sources them from your environment /
+prompts for them. Set the key wherever you keep secrets, e.g.:
+
+```bash
+export ANNAS_SECRET_KEY=your-donor-key          # only needed for downloads
+export ANNAS_DOWNLOAD_PATH=/absolute/path        # optional; defaults to ~/Downloads/annas
+```
+
+Searching needs no key. Downloads require a donor key
+(<https://annas-archive.org/donate>). Full details:
+[`skills/annas-archive/SKILL.md`](./skills/annas-archive/SKILL.md).
+
+The skill uses these CLI commands under the hood:
+
+| Command | What it does |
+|---|---|
+| `annas book-search "query"` | Search by title, author, or topic (prints metadata + MD5 hash). |
+| `annas book-download <hash> "Title.epub"` | Download a book (needs a donor key). Filename extension sets the format. |
+| `annas article-search "keywords \| DOI"` | Search papers, or look up a DOI (`10.…`) directly. |
+| `annas article-download "<doi>"` | Download a paper by DOI (needs a donor key). |
+
+---
+
+## Option B — MCP server setup
+
+Hermes loads MCP servers from `~/.hermes/config.yaml`. `annas-mcp` speaks MCP
+over stdio via its `mcp` subcommand, so Hermes launches it as a local stdio
+server.
+
+### Tools it exposes
 
 | Tool | What it does |
 |---|---|
@@ -20,7 +80,7 @@ launches it as a local stdio server.
 Search works without an API key. **Downloads require an Anna's Archive donor
 key** (`ANNAS_SECRET_KEY`), obtained by donating: <https://annas-archive.org/donate>.
 
-## Quick start (scripted)
+### Quick start (scripted)
 
 ```bash
 cd hermes-annas-mcp
@@ -39,7 +99,7 @@ cp .env.example .env         # then edit .env with your key + download path
 Then, in a Hermes session, run `/reload-mcp` (or restart Hermes) and the four
 tools appear in the registry.
 
-## Manual setup
+### Manual setup
 
 If you'd rather not run the script:
 
@@ -71,7 +131,7 @@ mcp_servers:
 
 **3. Reload:** `/reload-mcp` in a session, or restart Hermes.
 
-## Calling it from Hermes
+### Calling it from Hermes
 
 Once loaded, just ask Hermes naturally ("search Anna's Archive for _Designing
 Data-Intensive Applications_ and download the epub"), or invoke the tools
@@ -97,7 +157,7 @@ Hermes launches stdio servers with **only** the env vars declared in the
 `env:` block (it does not forward your whole shell environment), so these must
 be set there, not just in your shell.
 
-## Verifying without Hermes
+### Verifying without Hermes
 
 You can smoke-test the binary's MCP interface directly over stdio:
 
