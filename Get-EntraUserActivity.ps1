@@ -1,217 +1,79 @@
-<#
-.SYNOPSIS
-    Pulls Entra ID audit logs, interactive + non-interactive sign-ins, and sent
-    messages for a single user over the last N days.
-
-.DESCRIPTION
-    Signs you in interactively (Microsoft Graph + Exchange Online), then writes
-    one CSV per data set into a timestamped folder.
-
-    RETENTION LIMITS — the service, not this script, caps how far back you can go:
-      * Directory audit logs .... 7 days (Entra ID Free) / 30 days (P1, P2)
-      * Sign-in logs ............ 7 days (Free) / 30 days (P1, P2)
-      * Message trace (V2) ...... 10 days of live query
-      * Historical search ....... 90 days, async report
-    Asking for 90 days still only returns ~30 days of Graph data unless you
-    stream the logs to Log Analytics / Sentinel / a storage account. The script
-    warns you when the window you asked for exceeds what the API can serve.
-
-.PARAMETER UserPrincipalName
-    The user to report on, e.g. jdoe@contoso.com. Prompted for if omitted.
-
-.PARAMETER Days
-    How many days back to look. Prompted for if omitted.
-
-.PARAMETER OutputFolder
-    Where to write the CSVs. Defaults to the current directory.
-
-.EXAMPLE
-    .\Get-EntraUserActivity.ps1 -UserPrincipalName jdoe@contoso.com -Days 90
-
-.NOTES
-    Requires: Microsoft.Graph.Authentication and ExchangeOnlineManagement.
-        Install-Module Microsoft.Graph.Authentication, ExchangeOnlineManagement -Scope CurrentUser
-    Permissions: AuditLog.Read.All + Directory.Read.All (Graph), and an Exchange
-    role with message trace rights (e.g. View-Only Recipients / Security Reader).
-#>
-
-[CmdletBinding()]
-param(
-    [string]$UserPrincipalName,
-    [int]   $Days,
-    [string]$OutputFolder = (Get-Location).Path,
-    [switch]$SkipExchange
-)
-
+# Get-EntraUserActivity.ps1 — audit logs, interactive + non-interactive sign-ins,
+# and sent mail for one user. Prompts for the email and a day count, writes CSVs.
+#   Install-Module Microsoft.Graph.Authentication, ExchangeOnlineManagement -Scope CurrentUser
+# Service retention caps the window: 30d audit/sign-in (7d Free), 10d live message trace, 90d historical search.
+param([string]$User, [int]$Days, [string]$Out = '.', [switch]$SkipExchange)
 $ErrorActionPreference = 'Stop'
+if (!$User) { $User = Read-Host 'User email (UPN)' }
+if (!$Days) { $Days = [int](Read-Host 'How many days back') }
 
-if (-not $UserPrincipalName) { $UserPrincipalName = Read-Host 'User email (UPN)' }
-if (-not $Days)              { $Days = [int](Read-Host 'How many days back') }
-if ($Days -lt 1) { throw 'Days must be at least 1.' }
+$now = (Get-Date).ToUniversalTime(); $from = $now.AddDays(-$Days); $since = $from.ToString('yyyy-MM-ddTHH:mm:ssZ')
+$dir = Join-Path $Out ('{0}_{1}' -f ($User -replace '[^\w.-]', '_'), (Get-Date -Format yyyyMMdd-HHmmss))
+New-Item -ItemType Directory $dir -Force | Out-Null
 
-$startUtc = (Get-Date).ToUniversalTime().AddDays(-$Days)
-$endUtc   = (Get-Date).ToUniversalTime()
-$startStr = $startUtc.ToString('yyyy-MM-ddTHH:mm:ssZ')
-
-$stamp  = (Get-Date).ToString('yyyyMMdd-HHmmss')
-$outDir = Join-Path $OutputFolder ("{0}_{1}" -f ($UserPrincipalName -replace '[^\w.-]', '_'), $stamp)
-New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-
-function Save-Csv {
-    param([object[]]$Rows, [string]$Name)
-    $path = Join-Path $outDir "$Name.csv"
-    if ($Rows -and $Rows.Count) {
-        $Rows | Export-Csv -Path $path -NoTypeInformation -Encoding UTF8
-        Write-Host ("  {0,-28} {1,6} rows -> {2}" -f $Name, $Rows.Count, $path) -ForegroundColor Green
-    } else {
-        Write-Host ("  {0,-28} {1,6} rows (nothing returned)" -f $Name, 0) -ForegroundColor DarkYellow
-    }
+function Out-Set($Rows, $Name) {
+    $n = @($Rows).Count
+    if ($n) { $Rows | Export-Csv (Join-Path $dir "$Name.csv") -NoTypeInformation -Encoding UTF8 }
+    Write-Host ('  {0,-24} {1,6} rows' -f $Name, $n) -Fore $(if ($n) { 'Green' } else { 'DarkYellow' })
+}
+function Get-Log($Set, $Filter) {   # follows @odata.nextLink to the end
+    $uri = 'https://graph.microsoft.com/v1.0/auditLogs/{0}?$top=999&$filter={1}' -f $Set, [uri]::EscapeDataString($Filter)
+    while ($uri) { $r = Invoke-MgGraphRequest GET $uri -OutputType PSObject; $r.value; $uri = $r.'@odata.nextLink' }
 }
 
-# --- Microsoft Graph: audit logs + sign-ins -----------------------------------
+Import-Module Microsoft.Graph.Authentication
+Connect-MgGraph -Scopes AuditLog.Read.All, Directory.Read.All -NoWelcome
+if ($Days -gt 30) { Write-Warning "Entra keeps 30d of audit/sign-in logs (7d on Free) — expect less than $Days days unless they are archived to Log Analytics." }
+$tgt = Invoke-MgGraphRequest GET ('https://graph.microsoft.com/v1.0/users/{0}?$select=id,displayName,userPrincipalName,mail' -f [uri]::EscapeDataString($User)) -OutputType PSObject
+Write-Host ("`n{0} <{1}> — {2} days, since {3}`n" -f $tgt.displayName, $tgt.userPrincipalName, $Days, $since) -Fore Cyan
 
-Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
-Write-Host "`nConnecting to Microsoft Graph..." -ForegroundColor Cyan
-Connect-MgGraph -Scopes 'AuditLog.Read.All', 'Directory.Read.All' -NoWelcome
+# Audit logs: the user as actor and as target, deduped.
+Out-Set (@("initiatedBy/user/userPrincipalName eq '$User'", "targetResources/any(t: t/userPrincipalName eq '$User')") |
+    ForEach-Object { Get-Log directoryAudits "activityDateTime ge $since and $_" } | Sort-Object id -Unique |
+    Select-Object @{n = 'Time'; e = { $_.activityDateTime } }, category, activityDisplayName, result, resultReason,
+        @{n = 'Actor'; e = { $_.initiatedBy.user.userPrincipalName } }, @{n = 'ActorApp'; e = { $_.initiatedBy.app.displayName } },
+        @{n = 'IP'; e = { $_.initiatedBy.user.ipAddress } },
+        @{n = 'Targets'; e = { ($_.targetResources | ForEach-Object { if ($_.displayName) { $_.displayName } else { $_.userPrincipalName } }) -join '; ' } },
+        @{n = 'Changes'; e = { ($_.targetResources.modifiedProperties | ForEach-Object { "$($_.displayName): $($_.oldValue)->$($_.newValue)" }) -join ' | ' } },
+        correlationId | Sort-Object Time -Descending) 'AuditLogs'
 
-if ($Days -gt 30) {
-    Write-Warning "Entra keeps at most 30 days of audit and sign-in logs (7 on the Free tier). The $Days-day window will come back short unless these logs are archived to Log Analytics."
+# Sign-ins: non-interactive is a separate event type and is omitted unless asked for by name.
+foreach ($k in @{Interactive = 'interactiveUser'; NonInteractive = 'nonInteractiveUser' }.GetEnumerator()) {
+    Out-Set (Get-Log signIns "createdDateTime ge $since and userId eq '$($tgt.id)' and signInEventTypes/any(t: t eq '$($k.Value)')" |
+        Select-Object @{n = 'Time'; e = { $_.createdDateTime } }, userPrincipalName, appDisplayName, resourceDisplayName, clientAppUsed, ipAddress,
+            @{n = 'City'; e = { $_.location.city } }, @{n = 'Country'; e = { $_.location.countryOrRegion } },
+            @{n = 'Device'; e = { $_.deviceDetail.displayName } }, @{n = 'OS'; e = { $_.deviceDetail.operatingSystem } }, @{n = 'Browser'; e = { $_.deviceDetail.browser } },
+            @{n = 'Error'; e = { $_.status.errorCode } }, @{n = 'Failure'; e = { $_.status.failureReason } }, conditionalAccessStatus, riskLevelDuringSignIn,
+            @{n = 'AuthMethods'; e = { ($_.authenticationDetails.authenticationMethod) -join '; ' } }, correlationId |
+        Sort-Object Time -Descending) "SignIns_$($k.Key)"
 }
-
-function Invoke-GraphPaged {
-    param([string]$Uri)
-    $rows = New-Object System.Collections.Generic.List[object]
-    while ($Uri) {
-        $resp = Invoke-MgGraphRequest -Method GET -Uri $Uri -OutputType PSObject
-        if ($resp.value) { $rows.AddRange(@($resp.value)) }
-        $Uri = $resp.'@odata.nextLink'
-    }
-    , $rows.ToArray()
-}
-
-$userUri = 'https://graph.microsoft.com/v1.0/users/{0}?$select=id,displayName,userPrincipalName,mail' -f [uri]::EscapeDataString($UserPrincipalName)
-$user    = Invoke-MgGraphRequest -Method GET -Uri $userUri -OutputType PSObject
-Write-Host ("Target: {0} <{1}>  ({2} days, since {3})" -f $user.displayName, $user.userPrincipalName, $Days, $startStr)
-
-Write-Host "`nPulling logs..." -ForegroundColor Cyan
-
-# Directory audit logs — the user as actor, and the user as target.
-$auditFilters = @(
-    "activityDateTime ge $startStr and initiatedBy/user/userPrincipalName eq '$UserPrincipalName'"
-    "activityDateTime ge $startStr and targetResources/any(t: t/userPrincipalName eq '$UserPrincipalName')"
-)
-$audits = foreach ($f in $auditFilters) {
-    try {
-        Invoke-GraphPaged "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?`$filter=$([uri]::EscapeDataString($f))&`$top=999"
-    } catch { Write-Warning "Audit query failed: $($_.Exception.Message)" }
-}
-$auditRows = $audits | Sort-Object id -Unique | ForEach-Object {
-    [PSCustomObject]@{
-        ActivityDateTime = $_.activityDateTime
-        Category         = $_.category
-        Activity         = $_.activityDisplayName
-        Result           = $_.result
-        ResultReason     = $_.resultReason
-        InitiatedByUser  = $_.initiatedBy.user.userPrincipalName
-        InitiatedByApp   = $_.initiatedBy.app.displayName
-        IpAddress        = $_.initiatedBy.user.ipAddress
-        TargetResources  = ($_.targetResources | ForEach-Object { if ($_.displayName) { $_.displayName } else { $_.userPrincipalName } }) -join '; '
-        ModifiedProps    = ($_.targetResources.modifiedProperties | ForEach-Object { "$($_.displayName): $($_.oldValue) -> $($_.newValue)" }) -join ' | '
-        CorrelationId    = $_.correlationId
-        Id               = $_.id
-    }
-} | Sort-Object ActivityDateTime -Descending
-Save-Csv $auditRows 'AuditLogs'
-
-# Sign-in logs — interactive and non-interactive are separate event types.
-function Get-SignIns {
-    param([string]$EventType)
-    $f = "createdDateTime ge $startStr and userId eq '$($user.id)' and signInEventTypes/any(t: t eq '$EventType')"
-    $raw = Invoke-GraphPaged "https://graph.microsoft.com/v1.0/auditLogs/signIns?`$filter=$([uri]::EscapeDataString($f))&`$top=999"
-    $raw | ForEach-Object {
-        [PSCustomObject]@{
-            CreatedDateTime   = $_.createdDateTime
-            UserPrincipalName = $_.userPrincipalName
-            AppDisplayName    = $_.appDisplayName
-            ResourceDisplay   = $_.resourceDisplayName
-            ClientAppUsed     = $_.clientAppUsed
-            IpAddress         = $_.ipAddress
-            City              = $_.location.city
-            State             = $_.location.state
-            Country           = $_.location.countryOrRegion
-            DeviceName        = $_.deviceDetail.displayName
-            OperatingSystem   = $_.deviceDetail.operatingSystem
-            Browser           = $_.deviceDetail.browser
-            IsCompliant       = $_.deviceDetail.isCompliant
-            ErrorCode         = $_.status.errorCode
-            FailureReason     = $_.status.failureReason
-            ConditionalAccess = $_.conditionalAccessStatus
-            RiskLevel         = $_.riskLevelDuringSignIn
-            MfaDetail         = ($_.authenticationDetails | ForEach-Object { $_.authenticationMethod }) -join '; '
-            CorrelationId     = $_.correlationId
-            Id                = $_.id
-        }
-    } | Sort-Object CreatedDateTime -Descending
-}
-
-foreach ($pair in @(@{Type = 'interactiveUser'; Name = 'SignIns_Interactive' },
-                    @{Type = 'nonInteractiveUser'; Name = 'SignIns_NonInteractive' })) {
-    try { Save-Csv (Get-SignIns $pair.Type) $pair.Name }
-    catch { Write-Warning "$($pair.Name) failed: $($_.Exception.Message)" }
-}
-
-# --- Exchange Online: messages sent -------------------------------------------
 
 if (-not $SkipExchange) {
-    $sender = if ($user.mail) { $user.mail } else { $user.userPrincipalName }
-    Import-Module ExchangeOnlineManagement -ErrorAction Stop
-    Write-Host "`nConnecting to Exchange Online..." -ForegroundColor Cyan
+    $addr = if ($tgt.mail) { $tgt.mail } else { $tgt.userPrincipalName }
+    Import-Module ExchangeOnlineManagement
     Connect-ExchangeOnline -ShowBanner:$false
+    $start = if ($from -lt $now.AddDays(-10)) { $now.AddDays(-10) } else { $from }
+    if ($Days -gt 10) { Write-Warning "Message trace serves 10 days live; pulling since $($start.ToString('u')) and queueing a historical search for the rest." }
 
-    # Live message trace only reaches back 10 days.
-    $traceStart = if ($startUtc -lt $endUtc.AddDays(-10)) { $endUtc.AddDays(-10) } else { $startUtc }
-    if ($Days -gt 10) { Write-Warning "Message trace only serves 10 days live; querying since $($traceStart.ToString('u')) and submitting a historical search for the rest." }
-
-    $useV2 = [bool](Get-Command Get-MessageTraceV2 -ErrorAction SilentlyContinue)
-    $msgs  = New-Object System.Collections.Generic.List[object]
-    if ($useV2) {
-        # V2 pages backwards: re-query with the oldest row returned as the new end point.
-        $cursorEnd = $endUtc; $cursorRcpt = $null
-        for ($i = 0; $i -lt 200; $i++) {
-            $p = @{ StartDate = $traceStart; EndDate = $cursorEnd; SenderAddress = $sender; ResultSize = 5000 }
-            if ($cursorRcpt) { $p.StartingRecipientAddress = $cursorRcpt }
-            $batch = @(Get-MessageTraceV2 @p)
-            if (-not $batch.Count) { break }
-            $msgs.AddRange($batch)
-            if ($batch.Count -lt 5000) { break }
-            $last = $batch[-1]; $cursorEnd = $last.Received; $cursorRcpt = $last.RecipientAddress
-        }
-    } else {
-        for ($page = 1; $page -le 1000; $page++) {
-            $batch = @(Get-MessageTrace -StartDate $traceStart -EndDate $endUtc -SenderAddress $sender -PageSize 5000 -Page $page)
-            if (-not $batch.Count) { break }
-            $msgs.AddRange($batch)
-            if ($batch.Count -lt 5000) { break }
-        }
+    # V2 pages backwards: each round re-queries ending at the oldest row returned.
+    $msgs = [Collections.Generic.List[object]]::new(); $end = $now; $rcpt = $null
+    for ($i = 0; $i -lt 200; $i++) {
+        $p = @{StartDate = $start; EndDate = $end; SenderAddress = $addr; ResultSize = 5000 }
+        if ($rcpt) { $p.StartingRecipientAddress = $rcpt }
+        $b = @(Get-MessageTraceV2 @p)
+        if (!$b.Count) { break }
+        $msgs.AddRange($b)
+        if ($b.Count -lt 5000) { break }
+        $end = $b[-1].Received; $rcpt = $b[-1].RecipientAddress
     }
-
-    Save-Csv ($msgs | Select-Object Received, SenderAddress, RecipientAddress, Subject, Status, ToIP, FromIP, Size, MessageId, MessageTraceId |
-              Sort-Object Received -Descending) 'MessagesSent'
+    Out-Set ($msgs | Select-Object Received, SenderAddress, RecipientAddress, Subject, Status, FromIP, ToIP, Size, MessageId | Sort-Object Received -Descending) 'MessagesSent'
 
     if ($Days -gt 10) {
-        $histStart = if ($Days -gt 90) { $endUtc.AddDays(-90) } else { $startUtc }
-        if ($Days -gt 90) { Write-Warning 'Historical search caps out at 90 days; clamping.' }
-        $notify = (Get-ConnectionInformation | Select-Object -First 1).UserPrincipalName
-        try {
-            $job = Start-HistoricalSearch -ReportTitle "Sent-$sender-$stamp" -StartDate $histStart -EndDate $endUtc `
-                       -ReportType MessageTrace -SenderAddress $sender -NotifyAddress $notify
-            Write-Host ("  Historical search submitted: JobId {0}" -f $job.JobId) -ForegroundColor Green
-            Write-Host "  Results land in Defender portal > Mail flow > Message trace (usually under a few hours); $notify gets an email." -ForegroundColor DarkGray
-        } catch { Write-Warning "Historical search could not be submitted: $($_.Exception.Message)" }
+        $j = Start-HistoricalSearch -ReportTitle "Sent-$addr-$(Get-Date -Format yyyyMMddHHmm)" -ReportType MessageTrace -SenderAddress $addr `
+            -StartDate $(if ($Days -gt 90) { $now.AddDays(-90) } else { $from }) -EndDate $now -NotifyAddress (Get-ConnectionInformation)[0].UserPrincipalName
+        Write-Host "  Historical search (up to 90d) queued: $($j.JobId) — collect it in Defender > Mail flow > Message trace" -Fore Green
     }
-
     Disconnect-ExchangeOnline -Confirm:$false | Out-Null
 }
-
 Disconnect-MgGraph | Out-Null
-Write-Host "`nDone. Files in: $outDir`n" -ForegroundColor Cyan
+Write-Host "`nDone: $dir`n" -Fore Cyan
