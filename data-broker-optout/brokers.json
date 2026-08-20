@@ -1,0 +1,1155 @@
+{
+ "meta": {
+  "source": "https://github.com/yaelwrites/Big-Ass-Data-Broker-Opt-Out-List",
+  "source_name": "Big Ass Data Broker Opt-Out List (BADBOOL) by Yael Grauer",
+  "license": "CC BY-NC-SA 4.0 (adaptation of BADBOOL)",
+  "generated": "2026-08-20",
+  "source_updated": "2026-07-26"
+ },
+ "source_headings": [
+  "## Search Engines",
+  "## People Search Sites",
+  "### 💐 BeenVerified",
+  "### 💐 CheckPeople",
+  "### 💐Clustal",
+  "### 💐 Intelius",
+  "### 💐 Men Stopping Violence",
+  "### 💐 📞 MyLife",
+  "### 💐 Nuwber",
+  "### 💐 Radaris",
+  "### 💐 SmartBackgroundChecks",
+  "### 💐 💰 Spokeo",
+  "### 💐 That’s Them",
+  "### 💐 📞 💰 White Pages",
+  "### ☠ Acxiom",
+  "### ☠ AdvancedBackgroundChecks",
+  "### ☠ Ancestry.com",
+  "### ☠ FamilyTreeNow",
+  "### ☠ FastPeopleSearch.com",
+  "### ☠ USPhoneBook",
+  "### Archives",
+  "### Classmates.com",
+  "### Cyber Background Checks",
+  "### Facecheck",
+  "### FamilySearch",
+  "### FreePeopleDirectory",
+  "### InfoTracer",
+  "### National Public Data",
+  "### OpenDataUSA",
+  "### PeopleByName",
+  "### PeopleSearchNow",
+  "### 🎫 PimEyes",
+  "### PrivateEye",
+  "### PrivateRecords",
+  "### PropertyRecs",
+  "### Rehold",
+  "### 💰 Searchbug",
+  "### SearchPeopleFree",
+  "### SearchQuarry",
+  "### Social Catfish",
+  "### 💰 SpyFly",
+  "### TruePeopleSearch.com",
+  "### TruePeopleSearch.net",
+  "### Unite 4Heritage",
+  "### United States Phone Book",
+  "### UnMask",
+  "### USA People Search",
+  "### Veripages",
+  "### VoterRecords",
+  "### ZoomInfo",
+  "## Special Circumstances",
+  "## Preventing Identity Theft & Opting Out of Marketing Sites",
+  "### 📞 Consider freezing your credit, which prevents scammers from opening credit accounts in your name where credit reports are a necessary prerequisite to extending credit.",
+  "### Explore any privacy options offered by your state’s motor vehicle department.",
+  "### Contact your home and mobile phone companies to see if they offer privacy options, such as not listing your number on caller ID or allowing you to opt out of sales of phone numbers.",
+  "### Consider opting out of direct marketing and telemarketing.",
+  "### Opt out of prescreened credit offers",
+  "### Get on the Do Not Call Registry",
+  "### Additional Options (Paid and Free)",
+  "### Additional Resources"
+ ],
+ "brokers": [
+  {
+   "id": "been-verified",
+   "name": "BeenVerified",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://www.beenverified.com/app/optout/search",
+    "https://www.beenverified.com/app/optout/address-search"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information and opt out of both people search and property search using their respective opt-out forms. Confirm your opt-out request by clicking on a link sent to you via email.",
+   "covers": [
+    "PeopleLooker",
+    "PeopleSmart"
+   ],
+   "notes": "BeenVerified only allows one opt-out per email address, so you may need to reach out via email for additional opt-outs."
+  },
+  {
+   "id": "check-people",
+   "name": "CheckPeople",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [],
+   "search_url": "https://checkpeople.com/privacy-rights",
+   "optout_urls": [
+    "https://checkpeople.com/opt-out"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "First request a copy of your data by filling out your name and email address under \"Right to Know\" at CheckPeople's privacy rights page. If CheckPeople has your information, opt out via the opt-out form.",
+   "covers": [],
+   "notes": "You will be required to share your birthdate and full legal name."
+  },
+  {
+   "id": "clustal",
+   "name": "Clustal",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [],
+   "search_url": "http://Clustal.org",
+   "optout_urls": [
+    "https://www.clustal.org/privacy-control"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your information in the top search bar at Clustal.org and click \"view full record\" to grab that URL (important: the original URL will not work). Go to the Privacy Control page, enter the URL, and click \"remove my info,\" then enter your email address and click \"remove my info\" again. Finally, click the opt-out link in the email sent to you.",
+   "covers": [],
+   "notes": "If you have more than one listing, you'll need a different email address for each one."
+  },
+  {
+   "id": "intelius",
+   "name": "Intelius",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [],
+   "search_url": "https://www.intelius.com/",
+   "optout_urls": [
+    "https://suppression.peopleconnect.us/login"
+   ],
+   "emails": [
+    "support@mailer.intelius.com"
+   ],
+   "phones": [
+    "1-888-245-1655"
+   ],
+   "preferred_method": "mixed",
+   "instructions": "Find your information at intelius.com, then opt out by emailing support@mailer.intelius.com, calling 1-888-245-1655, or filling out the suppression form. If told Intelius can't find your account, you may need to confirm your mailing address, phone number, old email addresses, or other information via email.",
+   "covers": [
+    "Addresses.com",
+    "Addresssearch.com",
+    "Anywho",
+    "Classmates",
+    "DateCheck",
+    "Instant Checkmate",
+    "InstantPeopleFinder",
+    "iSearch",
+    "LookUpAnyone",
+    "Peopleconnect.us",
+    "PeopleFinder",
+    "PeopleLookup",
+    "Phonesbook",
+    "Publicrecords",
+    "Spock",
+    "Truthfinder",
+    "US Search",
+    "Zabasearch"
+   ],
+   "notes": "Make sure Intelius already has any confirmation information (mailing address, phone number, old emails) before providing it."
+  },
+  {
+   "id": "men-stopping-violence",
+   "name": "Men Stopping Violence",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [],
+   "search_url": "https://www.menstoppingviolence.org/people/",
+   "optout_urls": [
+    "https://www.menstoppingviolence.org/opt-out/"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your name, then enter your listing's URL on the opt-out page. Click \"remove my info\" and add your email address, then click on the confirmation link emailed to you.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "mylife",
+   "name": "MyLife",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [
+    "phone-required"
+   ],
+   "search_url": "https://www.mylife.com",
+   "optout_urls": [
+    "https://www.mylife.com/privacyrequest"
+   ],
+   "emails": [
+    "privacy@mylife.com"
+   ],
+   "phones": [
+    "(888) 704-1900"
+   ],
+   "preferred_method": "mixed",
+   "instructions": "Find your information at mylife.com, then opt out via the privacy request form. Alternatively, email your removal request to privacy@mylife.com with your name and a link to your profile.",
+   "covers": [],
+   "notes": "MyLife will try to get you to create an account with a copy of your driver's license to submit a profile removal request. Emailing info@mylife.com or removalrequests@mylife.com reportedly requires a phone call to (888) 704-1900; calling that number and pressing 2 previously removed you from MyLife (and Wink.com), but this no longer appears to work. A free membership can remove your reputation profile, though not personal information such as your home address."
+  },
+  {
+   "id": "nuwber",
+   "name": "Nuwber",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [],
+   "search_url": "https://nuwber.com/",
+   "optout_urls": [
+    "https://nuwber.com/removal/link"
+   ],
+   "emails": [
+    "support@nuwber.com"
+   ],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information, then opt out on the removal form. Try \"filter by state\" to isolate the \"person\" URL you need. If the URL you generate doesn't work in the form or you run into other problems, take a screenshot of your results and send it to support@nuwber.com asking them to opt you out.",
+   "covers": [],
+   "notes": "Don't bother trying to get a full report; it will waste your time with multiple steps and deceptive design trying to get you to pay for a subscription."
+  },
+  {
+   "id": "radaris",
+   "name": "Radaris",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [],
+   "search_url": "https://radaris.com/",
+   "optout_urls": [
+    "https://radaris.com/control-privacy"
+   ],
+   "emails": [
+    "customer-service@radaris.com"
+   ],
+   "phones": [],
+   "preferred_method": "mixed",
+   "instructions": "Find your information on radaris.com, ignoring sponsored links that take you to other sites. If your listing has a \"View Profile\" button, copy the profile URL and use it to complete the series of forms at the control-privacy page, hitting \"next\" and waiting for new pages to load. If there is no \"View Profile\" button, copy the text of your information or take a screenshot and email customer-service@radaris.com asking them to take it down; when they auto-reply telling you to use the online form, respond that the form does not accept your information.",
+   "covers": [],
+   "notes": "You may not have a Radaris listing even if you see sponsored links. The email route triggers an automatic reply directing you to the online form; you may need to reply several times before they confirm removal."
+  },
+  {
+   "id": "smart-background-checks",
+   "name": "SmartBackgroundChecks",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [],
+   "search_url": "https://www.smartbackgroundchecks.com/",
+   "optout_urls": [
+    "https://www.smartbackgroundchecks.com/optout"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information on smartbackgroundchecks.com, then complete the opt-out form at smartbackgroundchecks.com/optout.",
+   "covers": [
+    "PeopleFinders"
+   ],
+   "notes": "This will likely also remove your information from PeopleFinders."
+  },
+  {
+   "id": "spokeo",
+   "name": "Spokeo",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [
+    "paid"
+   ],
+   "search_url": "https://www.spokeo.com/search",
+   "optout_urls": [
+    "https://www.spokeo.com/optout"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information via Spokeo search, then on the opt-out page scroll down to the grammatically incorrect \"opt out your information\" section and enter the URL of the profile you want removed plus your email address. Confirm the opt-out request by clicking the link sent to you via email.",
+   "covers": [],
+   "notes": "Reports indicate Spokeo retains removed information for paid accounts even if it no longer shows in free searches; it may be worth paying for a $1 trial to check whether the data still appears after opting out."
+  },
+  {
+   "id": "thats-them",
+   "name": "That's Them",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [],
+   "search_url": "https://thatsthem.com/",
+   "optout_urls": [
+    "https://thatsthem.com/optout"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information on thatsthem.com; if it shows up, use the opt-out form at thatsthem.com/optout.",
+   "covers": [],
+   "notes": "Do not click on the Spokeo identity theft protection link, as it is a paid product."
+  },
+  {
+   "id": "white-pages",
+   "name": "White Pages",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [
+    "phone-required",
+    "paid"
+   ],
+   "search_url": "https://www.whitepages.com/",
+   "optout_urls": [
+    "https://www.whitepages.com/suppression_requests",
+    "https://support.whitepages.com/hc/en-us/articles/115010106908-How-do-I-edit-or-remove-a-personal-listing",
+    "https://support.whitepages.com/hc/en-us/requests/new"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information on whitepages.com, then opt out via the suppression_requests page. You must provide a phone number and enter an opt-out code when you receive the automated voice call (a four-digit code entered into your phone). Alternatively, send a request form via the support site. Also check 411.com, which White Pages owns; the opt-out is the same.",
+   "covers": [
+    "411.com"
+   ],
+   "notes": "Multiple options are listed because these sites tend to disappear. Sometimes information is removed from White Pages but not White Pages Premium, so double-check for your listing; it may not be possible to opt out of White Pages Premium pages without an account."
+  },
+  {
+   "id": "acxiom",
+   "name": "Acxiom",
+   "category": "people-search",
+   "priority": "high",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://www.acxiom.com/privacy/fr/",
+    "https://www.acxiom.com/privacy/it/",
+    "https://www.acxiom.com/privacy/es/",
+    "https://www.acxiom.com/optout/",
+    "https://privacyportal.onetrust.com/webform/342ca6ac-4177-4827-b61e-19070296cbd3/6896cf25-6953-4500-9c69-5a8fb6f6f932"
+   ],
+   "emails": [
+    "Datenschutz@acxiom.com"
+   ],
+   "phones": [
+    "(877) 774-2094"
+   ],
+   "preferred_method": "form",
+   "instructions": "Use the opt-out link for your country: France, Italy, or Spain consumer portals, or the US Consumer Opt Out page. Users in Austria, Germany, India and Switzerland may email Datenschutz@acxiom.com. Other international requests should go through the Acxiom Consumer International Rights Portal. If you don't have an email address, call (877) 774-2094 and follow the prompts.",
+   "covers": [],
+   "notes": "It is hard to find your own info for free. The Datenschutz@acxiom.com address is only for residents of Austria, Germany, India, and Switzerland — U.S. users should use the US Consumer Opt Out form instead."
+  },
+  {
+   "id": "advanced-background-checks",
+   "name": "AdvancedBackgroundChecks",
+   "category": "people-search",
+   "priority": "high",
+   "flags": [],
+   "search_url": "https://www.advancedbackgroundchecks.com",
+   "optout_urls": [
+    "https://www.advancedbackgroundchecks.com/opt-out"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your information (you can leave your city, state, and age blank). If it shows up, give an email address on the opt-out page, then click the link in the email to verify with either your date of birth or your address.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "ancestry",
+   "name": "Ancestry.com",
+   "category": "people-search",
+   "priority": "high",
+   "flags": [],
+   "search_url": "https://www.ancestry.com/account/",
+   "optout_urls": [
+    "https://support.ancestry.com/s/reportissue?language=en_US"
+   ],
+   "emails": [
+    "privacy@ancestry.com"
+   ],
+   "phones": [],
+   "preferred_method": "email",
+   "instructions": "Sign up for a free account (not a free trial), then search for your information on the sidebar and click every result that includes any state you have ever lived in. Cut and paste the URLs, even if they all direct to a sales page, and email them to privacy@ancestry.com. Alternatively, submit individual URLs via the content removal form.",
+   "covers": [],
+   "notes": "You can't see all of your data without a paid account; Ancestry will still delete information if you email links that would redirect to the proper site if you had an account. Sign up for a free account, not a free trial."
+  },
+  {
+   "id": "familytreenow",
+   "name": "FamilyTreeNow",
+   "category": "people-search",
+   "priority": "high",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://www.familytreenow.com/optout"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for yourself and remove your information via the opt-out form.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "fastpeoplesearch",
+   "name": "FastPeopleSearch.com",
+   "category": "people-search",
+   "priority": "high",
+   "flags": [],
+   "search_url": "https://www.fastpeoplesearch.com/",
+   "optout_urls": [
+    "https://www.fastpeoplesearch.com/optout"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Look for your information on the site, then remove it via the opt-out form.",
+   "covers": [],
+   "notes": "You may need to solve a captcha."
+  },
+  {
+   "id": "usphonebook",
+   "name": "USPhoneBook",
+   "category": "people-search",
+   "priority": "high",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://www.usphonebook.com/opt-out/"
+   ],
+   "emails": [
+    "support+optout@usphonebook.com"
+   ],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Look for your number and opt out via the opt-out page. If the opt-out link just hangs, email support+optout@usphonebook.com for help.",
+   "covers": [],
+   "notes": "The opt-out link sometimes hangs; email support in that case."
+  },
+  {
+   "id": "additional-options",
+   "name": "Additional Options (Paid and Free)",
+   "category": "marketing-credit",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://easyoptouts.com/",
+    "https://docs.google.com/spreadsheets/d/115L6LpQg_UX638IyUfdwGhRS7dIU3lKwz6fjAcDtE-0/",
+    "https://www.paperkarma.com/product/paperkarma-subscription/",
+    "https://www.valpak.com/remove-address",
+    "https://www.catalogchoice.org/",
+    "https://dmachoice.org/static/consumer_choice_tools.php",
+    "https://www.ims-dm.com/cgi/ddnc.php"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "mixed",
+   "instructions": "Consider a data broker opt-out service — the list's author personally uses and recommends EasyOptOuts — and fill in the gaps with the linked chart. For mail: PaperKarma (paid) removes your name from common direct mail vendors including charity solicitations, direct mail, and catalogs; remove your name from Valpak coupon packs for free; sign up for a free Catalog Choice account to cancel catalogs; DMAChoice (paid) removes your name from prospective mailers, and also maintains a Deceased Do Not Contact list you can register deceased individuals for.",
+   "covers": [],
+   "notes": "Removal services are not comprehensive: some data brokers do not allow third parties to remove listings, and removal services do not include every data broker on this list, let alone outside of it. DMAChoice's removal does not cover political mail or mail from companies you've done business with in the past two years. PaperKarma and DMAChoice charge a fee."
+  },
+  {
+   "id": "additional-resources",
+   "name": "Additional Resources",
+   "category": "marketing-credit",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://epic.org/wp-content/uploads/2026/05/Good-Luck-Opting-Out-Manipulative-Design-Patterns-in-Opt-Out-Processes.pdf",
+    "https://blog.yaelwrites.com/what-my-privacy-and-security-stack-actually-looks-like/",
+    "https://haveibeenpwned.com/"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "manual",
+   "instructions": "Read EPIC's report \"Good Luck Opting Out: Manipulative Design Patterns in Opt-Out Processes\" by Justin Sherman and Caroline Kraczon, and the author's blog post on what her privacy and security stack actually looks like. Use the free service Have I Been Pwned to check whether your email address has been involved in a data breach.",
+   "covers": [],
+   "notes": "These are informational resources, not opt-out forms. The author is still in the process of adding additional privacy and security resources. The blog post is not a guide, as your situation is different from the author's."
+  },
+  {
+   "id": "archives",
+   "name": "Archives",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.archives.com/search/ancestor/checkout",
+   "optout_urls": [
+    "https://www.archives.com/Optout"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "To find your information you must sign up for a free trial (and then cancel it). Then submit the opt-out form if you found your data.",
+   "covers": [],
+   "notes": "Finding your information requires signing up for a free trial, which you should then cancel."
+  },
+  {
+   "id": "classmates",
+   "name": "Classmates.com",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://help.classmates.com/hc/en-us/articles/115002224171-How-can-I-cancel-my-membership-"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "account",
+   "instructions": "Cancel your free or paid membership by following the linked help-article instructions.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "credit-freeze",
+   "name": "Consider freezing your credit",
+   "category": "marketing-credit",
+   "priority": "normal",
+   "flags": [
+    "phone-required"
+   ],
+   "search_url": null,
+   "optout_urls": [
+    "https://www.equifax.com/personal/credit-report-services/credit-freeze/",
+    "https://www.experian.com/freeze/center.html",
+    "https://www.transunion.com/credit-freeze/place-credit-freeze",
+    "https://service.transunion.com/dss/orderStep1_form.page",
+    "https://www.innovis.com/personal/securityFreeze",
+    "https://www.innovis.com/securityFreeze/index",
+    "https://www.chexsystems.com/security-freeze/place-freeze",
+    "https://files.consumerfinance.gov/f/documents/cfpb_consumer-reporting-companies_list_2025.pdf"
+   ],
+   "emails": [],
+   "phones": [
+    "1 (800) 349-9960",
+    "1 (888) 397‑3742",
+    "1 (888) 909-8872",
+    "1 (800) 540-2505",
+    "1 (800) 428-9623"
+   ],
+   "preferred_method": "mixed",
+   "instructions": "Freeze your credit with each bureau — Equifax, Experian, TransUnion, Innovis, and ChexSystems — by calling their numbers or using their credit/security freeze pages. You will need to provide personal information such as your name, address, date of birth, and social security number. Freezing prevents scammers from opening credit accounts in your name where credit reports are a necessary prerequisite to extending credit.",
+   "covers": [],
+   "notes": "The ChexSystems freeze prevents accounts, loans, and services from being approved in your name without your consent. For more information on freezing your credit, see the Consumer Financial Protection Bureau's 2025 Consumer Reporting Company List (PDF)."
+  },
+  {
+   "id": "direct-marketing-telemarketing",
+   "name": "Consider opting out of direct marketing and telemarketing",
+   "category": "marketing-credit",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://github.com/glamrock/data-brokers/blob/master/data-brokers.md",
+    "https://optout.aboutads.info"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "mixed",
+   "instructions": "Use Griffin Boyce's list of direct marketing and telemarketing opt-out information to work through those opt-outs. You can also opt out of targeted ads using cookies and similar technology at the browser level at https://optout.aboutads.info.",
+   "covers": [],
+   "notes": "Griffin Boyce's compiled list was last updated in 2019."
+  },
+  {
+   "id": "phone-company-privacy-options",
+   "name": "Contact your home and mobile phone companies to see if they offer privacy options",
+   "category": "marketing-credit",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "manual",
+   "instructions": "Contact your home and mobile phone companies and ask whether they offer privacy options, such as not listing your number on caller ID or allowing you to opt out of sales of phone numbers.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "cyber-background-checks",
+   "name": "Cyber Background Checks",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.cyberbackgroundchecks.com/",
+   "optout_urls": [
+    "https://www.cyberbackgroundchecks.com/removal"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Look for your information on the site, then opt out via the removal form.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "dmv-privacy-options",
+   "name": "Explore any privacy options offered by your state's motor vehicle department",
+   "category": "marketing-credit",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "manual",
+   "instructions": "Check with your state's motor vehicle department and explore any privacy options it offers.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "facecheck",
+   "name": "Facecheck",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://Facecheck.id",
+   "optout_urls": [
+    "https://facecheck.id/Face-Search/RemoveMyPhotos"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Facecheck.id is reverse image search software that finds your face in photos and videos across major social media platforms. To remove your face from its search engine, search for your image, then upload a driver's license or ID card (you can hide your name, address and ID number) or a selfie with your face and two fingers touching your chin.",
+   "covers": [],
+   "notes": "Removal does not delete your image from the websites it was found on — it only stops people from searching for it on Facecheck. Facecheck states it makes an exception for violent criminals."
+  },
+  {
+   "id": "familysearch",
+   "name": "FamilySearch",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.familysearch.org/search/",
+   "optout_urls": [
+    "https://submit-irm.trustarc.com/services/validation/b8d6e704-e5b1-42a0-9f86-bbdec35939a1"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Sign up for a free account at familysearch.org and search the historical records. Copy the URLs of the records containing your information and submit them via the opt-out form. You will need to verify your email address.",
+   "covers": [],
+   "notes": "Requires creating a free account and verifying your email address."
+  },
+  {
+   "id": "freepeopledirectory",
+   "name": "FreePeopleDirectory",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.freepeopledirectory.com",
+   "optout_urls": [
+    "https://www.spokeo.com/optout"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your information on FreePeopleDirectory. If you find it, opt out on Spokeo's opt-out page, making sure to scroll down to the grammatically incorrect \"opt out your information\" section.",
+   "covers": [],
+   "notes": "The opt-out is handled through Spokeo's opt-out page; scroll down to the \"opt out your information\" section."
+  },
+  {
+   "id": "do-not-call-registry",
+   "name": "Get on the Do Not Call Registry",
+   "category": "marketing-credit",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://www.donotcall.gov/"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Register at https://www.donotcall.gov/ to get on the Do Not Call Registry.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "infotracer",
+   "name": "InfoTracer",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.infotracer.com",
+   "optout_urls": [
+    "https://infotracer.com/optout/",
+    "https://members.infotracer.com/tspec/shared/assets/data_opt_out_form.pdf"
+   ],
+   "emails": [],
+   "phones": [
+    "1-617-933-9946"
+   ],
+   "preferred_method": "form",
+   "instructions": "Find your information on infotracer.com, then opt out by filling out the online opt-out form. Alternatively, mail in a different (PDF) form or fax it to 1-617-933-9946.",
+   "covers": [],
+   "notes": "The listed phone number is a fax number for the mail-in form, not a call-in line."
+  },
+  {
+   "id": "national-public-data",
+   "name": "National Public Data",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://nationalpublicdata.com/search",
+   "optout_urls": [
+    "https://nationalpublicdata.com/optout.html"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your data, copy the unique URL of your record, and paste it into the opt-out form. Then share your email address and verify the opt-out request via the confirmation email.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "opendatausa",
+   "name": "OpenDataUSA",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://opendatausa.com/optout",
+   "optout_urls": [
+    "https://opendatausa.com/optout"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your records and check the box next to each record you want removed, then click the 'Remove Selected' button at the bottom of the page. Fill out your name, address, relationship to yourself, and an email address, then click 'confirm and remove' in the confirmation email you receive.",
+   "covers": [],
+   "notes": "Has personal information as well as political donations. The site only recognizes email addresses from Gmail, Yahoo, Outlook, or other large providers as valid."
+  },
+  {
+   "id": "prescreened-credit-offers",
+   "name": "Opt out of prescreened credit offers",
+   "category": "marketing-credit",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://www.optoutprescreen.com/"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Follow the instructions at https://www.optoutprescreen.com/ to opt out of prescreened credit offers.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "peoplebyname",
+   "name": "PeopleByName",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.peoplebyname.com/people",
+   "optout_urls": [
+    "https://www.peoplebyname.com/remove.php"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Look up your name, or fill in your name directly in the URL like https://www.peoplebyname.com/people/[Last_Name]/[First_Name]. Then opt out via the removal form for each record.",
+   "covers": [],
+   "notes": "You must opt out separately for each record."
+  },
+  {
+   "id": "peoplesearchnow",
+   "name": "PeopleSearchNow",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://www.peoplesearchnow.com/opt-out"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information and submit the opt-out form.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "pimeyes",
+   "name": "PimEyes",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [
+    "id-required"
+   ],
+   "search_url": "https://pimeyes.com/",
+   "optout_urls": [
+    "https://pimeyes.com/en/opt-out-request-form"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "To see if your photographs are in the database, upload a photo at pimeyes.com. To opt out, upload an image of your face to the opt-out request form, attach a photo ID with all sensitive data (other than your name and photograph) blurred, and provide your email address.",
+   "covers": [],
+   "notes": "PimEyes is a face search engine that uses face recognition for reverse image search. Blur your ID's sensitive data using Signal's blur feature, Photoshop, or a Sharpie on a copy. PimEyes claims it does not store photos taken with your camera."
+  },
+  {
+   "id": "privateeye",
+   "name": "PrivateEye",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.privateeye.com/",
+   "optout_urls": [
+    "https://www.privateeye.com/removal"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Look for your information and initiate the opt-out if needed. You will receive a link to a record removal form that you must fill out.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "privaterecords",
+   "name": "PrivateRecords",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.privaterecords.net/name/landing",
+   "optout_urls": [
+    "https://www.privaterecords.net/api/helper/optOutLight/search"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your name and state, then opt out via the opt-out link.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "propertyrecs",
+   "name": "PropertyRecs",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://dashboard.propertyrecs.com/opt-out",
+   "optout_urls": [
+    "https://dashboard.propertyrecs.com/opt-out"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your name and state on the opt-out page, then opt out if needed.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "rehold",
+   "name": "Rehold",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://rehold.com/",
+   "optout_urls": [],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Look up your home address at rehold.com. If there is a number or name next to it you want removed, click the red 'remove' button next to it, then enter your name and email address and solve a captcha.",
+   "covers": [],
+   "notes": "Removal is done via the 'remove' button on your address listing; there is no separate opt-out page."
+  },
+  {
+   "id": "search-engines-google-bing",
+   "name": "Search Engines (Google & Bing)",
+   "category": "search-engine",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://support.google.com/websearch/troubleshooter/3111061",
+    "https://www.microsoft.com/en-ca/concern/bing",
+    "https://support.google.com/websearch/answer/12719076"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "manual",
+   "instructions": "If you've been doxed, remove your contact info from Google Search and from Bing via their removal pages. Use Google's free Results About You service to search for your data and ask for it to be deindexed; Google also removes non-consensual or intimate personal images, involuntary fake pornography, irrelevant pornography from results for your name, content on sites with exploitative removal practices, and other categories.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "searchbug",
+   "name": "Searchbug",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [
+    "paid"
+   ],
+   "search_url": "https://www.searchbug.com/",
+   "optout_urls": [
+    "https://www.searchbug.com/contact-us.aspx"
+   ],
+   "emails": [],
+   "phones": [
+    "(760) 454-7301",
+    "(760) 454-7341"
+   ],
+   "preferred_method": "mixed",
+   "instructions": "Search for your information (you must sign up with a credit card, though the first search is free). Then contact Searchbug via the contact form or chat link, or by phone or text at (760) 454-7301, or by fax at (760) 454-7341, and ask them to block the display of your personal information.",
+   "covers": [],
+   "notes": "You have to sign up with a credit card to search for your information, though your first search is free."
+  },
+  {
+   "id": "searchpeoplefree",
+   "name": "SearchPeopleFree",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.searchpeoplefree.com/",
+   "optout_urls": [
+    "https://www.searchpeoplefree.com/opt-out"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information, making sure to search by name, phone number, address, and email address. Then use the opt-out form.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "searchquarry",
+   "name": "SearchQuarry",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.searchquarry.com/",
+   "optout_urls": [
+    "https://members.searchquarry.com/removeMyData/"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information. If it is listed, use the removal form, then click the verification link sent to your inbox to finalize the opt-out.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "social-catfish",
+   "name": "Social Catfish",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://socialcatfish.com",
+   "optout_urls": [
+    "https://socialcatfish.com/opt-out/"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information and record the URL of each page that has it. Go to the opt-out page and scroll down to the instructions for removing URLs, email, phone number, and address. Provide your email address and click the confirmation link to complete the opt-out.",
+   "covers": [],
+   "notes": "Only ask for information to be removed if you already see it on the site."
+  },
+  {
+   "id": "special-circumstances",
+   "name": "Special Circumstances",
+   "category": "special",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://opennpi.com/provider/",
+   "optout_urls": [
+    "https://www.privacyrights.org/data-brokers",
+    "https://nnedv.org/mdocs-posts/people-searches-data-brokers/",
+    "https://opennpi.com/contact",
+    "https://support.doximity.com/hc/en-us/articles/9349631650323-How-to-Update-Edit-Your-Profile-on-the-Doximity-Website",
+    "https://support.doximity.com/hc/en-us/articles/360039340393-How-to-Delete-Your-Doximity-Profile"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "manual",
+   "instructions": "If you're a victim of violent crime or identity theft, you can often opt out of information others can't, though you may need to provide court orders; check the fuller broker lists at privacyrights.org and the NNEDV resource. If you're experiencing or have experienced domestic violence, sexual abuse, or stalking, search for your state's \"address confidentiality program\" to get a substitute address and mail forwarding. If you're a healthcare worker with an NPI number, your personal cell or home address may appear in online directories because it was listed on your NPI profile; CMS now lets you use a P.O. box instead of a home address if you have no physical practice address. Look up your information at opennpi.com/provider, update or remove it via the opennpi.com contact form, and also reach out to aggregator sites like Doximity, where you may be able to edit or delete your profile.",
+   "covers": [],
+   "notes": "Opt-outs in this section may require court orders or other documentation; the first two URLs are resource lists (privacyrights.org, NNEDV) rather than direct opt-out forms."
+  },
+  {
+   "id": "spyfly",
+   "name": "SpyFly",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [
+    "paid"
+   ],
+   "search_url": "https://www.spyfly.com",
+   "optout_urls": [
+    "https://www.spyfly.com/help-center/remove-my-public-record"
+   ],
+   "emails": [
+    "support@spyfly.com"
+   ],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Look for your data, then use the opt-out page; you can also try emailing support@spyfly.com. You will need to provide your name, age, address, and email address.",
+   "covers": [],
+   "notes": "Make sure SpyFly has information you'd like removed before volunteering your name, age, address, and email address."
+  },
+  {
+   "id": "truepeoplesearch-com",
+   "name": "TruePeopleSearch.com",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": null,
+   "optout_urls": [
+    "https://www.truepeoplesearch.com/removal"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Follow the removal instructions: enter your name, city and state, and email address, then solve several captchas to see if you are listed, after which you can remove your information.",
+   "covers": [],
+   "notes": "You will need to solve several captchas."
+  },
+  {
+   "id": "truepeoplesearch-net",
+   "name": "TruePeopleSearch.net",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://truepeoplesearch.net",
+   "optout_urls": [
+    "https://docs.google.com/forms/d/e/1FAIpQLSeCPggzv4iXE20iUjcr6vdVWxBOblCyGwDLcO-jZA5j2YF5fQ/viewform"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Look for your information first. If it shows up, opt out by entering the URL and other information into the Google Form.",
+   "covers": [],
+   "notes": "Close any additional pages the site opens, and do not click on any of the \"top rated background search services\" links."
+  },
+  {
+   "id": "unite-4heritage",
+   "name": "Unite 4Heritage",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "Unite4heritgage.org",
+   "optout_urls": [
+    "https://www.unite4heritage.org/opt-out"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your information by filling out your first and last name, leaving off the city and state. Paste the URL of your listing into the opt-out page, click \"submit opt-out request,\" and type in your email address. When you get an email, click the \"confirm request\" button.",
+   "covers": [],
+   "notes": "The search link in the source is written as \"Unite4heritgage.org\" (sic), copied exactly as it appears."
+  },
+  {
+   "id": "united-states-phone-book",
+   "name": "United States Phone Book",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.unitedstatesphonebook.com/search.php",
+   "optout_urls": [
+    "https://www.unitedstatesphonebook.com/contact.php"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your information on the search page. If your address is listed and you want it removed, enter the telephone number and zip code listed on the site into the contact page.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "unmask",
+   "name": "UnMask",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://unmask.com/",
+   "optout_urls": [
+    "https://unmask.com/opt-out/"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your information and find your entry, then go to the opt-out form and enter your name, city, and state. They will send a confirmation email with a link you must click to finish the removal process.",
+   "covers": [],
+   "notes": "You'll need to solve a couple of captchas along the way."
+  },
+  {
+   "id": "usa-people-search",
+   "name": "USA People Search",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://www.usa-people-search.com/",
+   "optout_urls": [
+    "https://www.usa-people-search.com/removal"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information on the site, then remove it via the removal page.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "veripages",
+   "name": "Veripages",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://veripages.com/",
+   "optout_urls": [
+    "https://veripages.com/inner/control-privacy"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Find your information, then on the opt-out page enter your profile URL along with your name and email. Fill out a captcha, then click the confirmation link in the email to finalize your request.",
+   "covers": [],
+   "notes": null
+  },
+  {
+   "id": "voterrecords",
+   "name": "VoterRecords",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://voterrecords.com/",
+   "optout_urls": [],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Go to VoterRecords.com, find your information, scroll to the bottom of the page, and click the \"record opt-out\" link. This leads to an opt-out form you must submit; you may then receive a verification link you'll need to click to verify your opt-out request.",
+   "covers": [],
+   "notes": "The opt-out form is only reachable via the \"record opt-out\" link at the bottom of your record page; no direct form URL is given."
+  },
+  {
+   "id": "zoominfo",
+   "name": "ZoomInfo",
+   "category": "people-search",
+   "priority": "normal",
+   "flags": [],
+   "search_url": "https://privacyrequest.zoominfo.com/remove/verify",
+   "optout_urls": [
+    "https://privacyrequest.zoominfo.com/remove/verify"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Check whether your information is on ZoomInfo by filling out the verification form. Opt out if it has an email on record; they will email you a code.",
+   "covers": [],
+   "notes": "ZoomInfo appears to have moved towards focusing primarily on business rather than individuals."
+  }
+ ]
+}
