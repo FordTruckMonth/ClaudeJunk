@@ -1,0 +1,21 @@
+To Whom It May Concern,
+
+I am writing to request the removal of my personal information from {broker_name}{covers_clause}, including all public listings, profiles, background reports, cached copies, and derivative records, and to opt out of any sale or sharing of my personal information.
+
+Please treat this as a request to delete my personal information and to opt out of the sale or sharing of my personal information under the California Consumer Privacy Act (Cal. Civ. Code § 1798.100 et seq., as amended by the CPRA) and all equivalent U.S. state privacy laws applicable to me, and additionally as a request under your own published privacy policy and opt-out procedures.
+
+The information I am asking you to remove relates to:
+
+{identity_block}
+{profile_block}
+Specifically, I ask that you:
+
+1. Delete all records relating to me from your website(s), databases, and any affiliated or co-branded services you operate.
+2. Opt me out of any sale or sharing of my personal information with third parties.
+3. Add me to your suppression list so my information does not reappear when your data sources are refreshed.
+4. Confirm in writing to this email address when this request has been completed.
+
+If you need additional information to verify this request, please reply to this email rather than requiring the submission of government identification. Please note that applicable state privacy laws generally require a response within 45 days.
+
+Thank you,
+{full_name}
