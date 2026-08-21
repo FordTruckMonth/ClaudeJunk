@@ -52,7 +52,7 @@ $ python3 optout.py followup      # compose follow-ups for ignored requests
 | `compose [ids...] [--dry-run] [-y]` | Open a pre-filled Thunderbird compose window per email-based broker, in batches. Prompts (optionally) for your listing URL on each site. `--all-email` also includes brokers where email is only a fallback route. |
 | `forms [ids...]` | For each form-based broker: opens the search + opt-out pages in your browser, prints the steps, then records the outcome (`done` / `sent` / `blocked` / `n/a` / postpone). Resumable. |
 | `eml [ids...]` | Writes RFC-822 `.eml` drafts to `outbox/` instead (open in Thunderbird, press Ctrl+E "Edit As New Message", send). |
-| `mailto` | Writes `mailto.html` — one pre-filled `mailto:` link per broker, for any default mail client. |
+| `mailto` | Writes `mailto.html` — one pre-filled `mailto:` link per broker, for any default mail client. Links carry a condensed request (OSes truncate long `mailto:` URLs); `compose`/`eml` produce the full letter. |
 | `send [ids...] [-y]` | Fully unattended: sends via SMTP directly (settings copied from Thunderbird's Outgoing Server config; password via `OPTOUT_SMTP_PASSWORD` env var or prompt). No review window — use deliberately. |
 | `mark <id>... <status> [--note ...]` | Manually set status (`pending`, `in-progress`, `sent`, `followup-sent`, `done`, `blocked`, `na`). |
 | `status` | Dashboard: progress counts, requests awaiting confirmation, overdue ones, suggested next action. |
@@ -88,6 +88,18 @@ handled by `forms`.
 
 BADBOOL changes regularly — run `check-upstream` now and then, and consult
 the original list for anything marked stale.
+
+### Suspect entries
+
+Three entries in the fetched copy of the list point at sites that are not
+data brokers (a bioinformatics project, a nonprofit's staff directory, a
+UNESCO campaign site). They are kept in `brokers.json` for transparency but
+carry a `suspect` flag with an explanation: the tool excludes them from all
+default runs, marks them `!` in `list`, and asks for explicit confirmation
+before opening their pages. One of them ("Clustal") is a corrupted variant
+of ClustrMaps' well-known opt-out procedure, so a proper `clustrmaps` entry
+has been restored alongside it. See `show clustal men-stopping-violence
+unite-4heritage` for details, and verify against the upstream list.
 
 ## Ground rules (inherited from BADBOOL)
 

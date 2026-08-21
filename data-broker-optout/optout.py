@@ -17,6 +17,7 @@ Requires Python 3.11+. Standard library only.
 
 import argparse
 import json
+import shlex
 import shutil
 import ssl
 import subprocess
@@ -81,7 +82,17 @@ def load_config():
 
 def load_state():
     if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        try:
+            state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            sys.exit(f"Could not read {STATE_FILE.name} ({exc}).\n"
+                     "Restore it from a backup, or delete it to start "
+                     "tracking from scratch.")
+        if not isinstance(state.get("brokers"), dict):
+            sys.exit(f"{STATE_FILE.name} does not look like this tool's "
+                     "state file (no 'brokers' table). Move it aside to "
+                     "start fresh.")
+        return state
     return {"version": 1, "brokers": {}}
 
 
@@ -146,7 +157,11 @@ def covers_clause(broker):
 
 def build_body(cfg, broker, profile_url, template="initial_request.txt",
                extra=None):
-    text = (TEMPLATES / template).read_text(encoding="utf-8")
+    path = TEMPLATES / template
+    if not path.exists():
+        sys.exit(f"Missing {path} — re-clone or restore the templates/ "
+                 "directory.")
+    text = path.read_text(encoding="utf-8")
     profile_block = ""
     if profile_url:
         profile_block = (f"\nMy listing appears at the following URL:\n"
@@ -199,7 +214,7 @@ def select_email_targets(brokers, state, ids, include_all):
                      + "\nUse `forms` for form-based brokers.")
         return targets
     chooser = email_capable if include_all else email_preferred
-    return [b for b in brokers if chooser(b)
+    return [b for b in brokers if chooser(b) and not b.get("suspect")
             and broker_state(state, b["id"])["status"] in OPEN_STATUSES]
 
 
@@ -217,7 +232,13 @@ def ask_profile_url(broker, entry, assume_yes):
 
 def thunderbird_cmd(cfg):
     binary = cfg.get("thunderbird", {}).get("binary") or "thunderbird"
-    parts = binary.split() if " " in binary else [binary]
+    # A path with spaces ("C:\Program Files\...") is one executable; only
+    # treat the value as a wrapper command ("flatpak run org...") when the
+    # whole string doesn't resolve to a real program.
+    if shutil.which(binary) or Path(binary).exists():
+        parts = [binary]
+    else:
+        parts = shlex.split(binary) or [binary]
     if shutil.which(parts[0]) is None and not Path(parts[0]).exists():
         print(f"! Warning: '{parts[0]}' not found on PATH — set "
               "[thunderbird] binary in me.toml", file=sys.stderr)
@@ -333,17 +354,19 @@ def cmd_list(args):
         entry = broker_state(state, b["id"])
         if args.status and entry["status"] != args.status:
             continue
-        if args.method == "email" and not email_capable(b):
+        if args.method == "email" and not email_preferred(b):
             continue
-        if args.method == "form" and email_capable(b):
+        if args.method == "form" and email_preferred(b):
             continue
         if args.priority and b["priority"] != args.priority:
             continue
-        method = "email" if email_capable(b) else b["preferred_method"]
+        method = "email" if email_preferred(b) else b["preferred_method"]
+        mark = "! " if b.get("suspect") else ""
         print(f"{PRIORITY_MARK[b['priority']]} {b['id']:<28} "
-              f"{method:<7} {entry['status']:<14} {b['name']}")
+              f"{method:<7} {entry['status']:<14} {mark}{b['name']}")
         shown += 1
-    print(f"\n{shown} broker(s). *** = crucial, ** = high priority. "
+    print(f"\n{shown} broker(s). *** = crucial, ** = high priority, "
+          "! = suspect entry (see `show <id>`). "
           "Details:  python3 optout.py show <id>")
 
 
@@ -354,6 +377,8 @@ def cmd_show(args):
         entry = broker_state(state, b["id"])
         print(f"\n=== {b['name']}  [{b['id']}]  "
               f"priority: {b['priority']}  status: {entry['status']}")
+        if b.get("suspect"):
+            print(f"    !! SUSPECT ENTRY: {b['suspect']}")
         if b.get("flags"):
             print("    flags:", ", ".join(b["flags"]))
         if b.get("search_url"):
@@ -395,10 +420,11 @@ def compose_flow(brokers, cfg, state, args, template, extra_for):
         if args.dry_run:
             continue
         status = "followup-sent" if template.startswith("followup") else "sent"
-        if args.yes or input(
-                "  Mark as sent once you hit Send? [Y/n]: ").strip().lower() != "n":
+        if args.yes or not input(
+                "  Mark as sent once you hit Send? [Y/n]: "
+                ).strip().lower().startswith("n"):
             record(state, b["id"], status=status, event=status)
-        if not pause_between_batches(opened, batch_size):
+        if not args.yes and not pause_between_batches(opened, batch_size):
             break
     print(f"\n{opened} compose window(s) {'planned' if args.dry_run else 'opened'}. "
           f"Bodies saved under {OUTBOX}/")
@@ -425,6 +451,11 @@ def cmd_followup(args):
     state = load_state()
     due_days = cfg.get("preferences", {}).get("followup_days", 45)
     today = date.today()
+    if args.ids:
+        for b in pick(brokers, args.ids):
+            if not email_capable(b):
+                sys.exit(f"{b['id']} has no opt-out email address — "
+                         "follow-ups only work for email-based requests.")
     targets, extras = [], {}
     for b in brokers:
         if not email_capable(b):
@@ -457,8 +488,7 @@ def cmd_forms(args):
     state = load_state()
     targets = (pick(brokers, args.ids) if args.ids else
                [b for b in brokers
-                if not email_preferred(b)
-                and b["category"] in ("people-search", "search-engine")
+                if not email_preferred(b) and not b.get("suspect")
                 and broker_state(state, b["id"])["status"] in OPEN_STATUSES])
     if not targets:
         print("No pending form-based brokers. See `status`.")
@@ -471,6 +501,11 @@ def cmd_forms(args):
         entry = broker_state(state, b["id"])
         print(f"\n=== {b['name']}  ({b['priority']}"
               + (", " + ", ".join(b["flags"]) if b.get("flags") else "") + ")")
+        if b.get("suspect"):
+            print(f"  !! SUSPECT ENTRY: {b['suspect']}")
+            if input("  This may not be a real data broker. Open its pages "
+                     "anyway? [y/N]: ").strip().lower() != "y":
+                continue
         print("  " + b["instructions"])
         if b.get("notes"):
             print(f"  note: {b['notes']}")
@@ -522,17 +557,26 @@ def cmd_status(args):
     for status in STATUSES:
         if counts.get(status):
             print(f"  {status:<14} {counts[status]}")
+    suspect = [b["id"] for b in brokers if b.get("suspect")]
+    if suspect:
+        print(f"\n{len(suspect)} suspect entries excluded from automation "
+              f"({', '.join(suspect)}) — see `show <id>`.")
     if awaiting:
         print("\nAwaiting confirmation:")
         for b, days in awaiting:
             print(f"  {b['id']:<28} sent {days} day(s) ago")
     if overdue:
-        print(f"\nOVERDUE (> {due_days} days, no confirmation) — run "
-              "`python3 optout.py followup`:")
+        print(f"\nOVERDUE (> {due_days} days, no confirmation):")
         for b, days in overdue:
-            print(f"  {b['id']:<28} sent {days} day(s) ago")
+            hint = ("followup" if email_capable(b)
+                    else f"re-check the listing: forms {b['id']}")
+            print(f"  {b['id']:<28} sent {days} day(s) ago — {hint}")
+        if any(email_capable(b) for b, _ in overdue):
+            print("  Run `python3 optout.py followup` for the email-based "
+                  "ones.")
     nxt = next((b for b in brokers
-                if broker_state(state, b["id"])["status"] in OPEN_STATUSES),
+                if not b.get("suspect")
+                and broker_state(state, b["id"])["status"] in OPEN_STATUSES),
                None)
     if nxt:
         method = "compose" if email_preferred(nxt) else "forms"
@@ -579,17 +623,37 @@ def cmd_mailto(args):
         return
     rows = []
     for b in targets:
-        body = build_body(cfg, b, broker_state(state, b["id"]).get("profile_url"))
+        # mailto: URLs get truncated by OSes/browsers past ~2000 chars, so
+        # links carry a condensed request; the full letter comes via
+        # `compose`/`eml`. RFC 6068 wants CRLF line breaks.
+        profile_url = broker_state(state, b["id"]).get("profile_url")
+        body = (
+            "To Whom It May Concern,\n\n"
+            f"Please delete my personal information from {b['name']}"
+            f"{covers_clause(b)}, add me to your suppression list, and opt "
+            "me out of any sale or sharing of my personal information, as "
+            "provided by the California Consumer Privacy Act and equivalent "
+            "state privacy laws. The information concerned relates to:\n\n"
+            + identity_block(cfg) + "\n"
+            + (f"\nMy listing: {profile_url}\n" if profile_url else "")
+            + "\nPlease confirm completion in writing to this address.\n\n"
+            f"Thank you,\n{cfg['identity']['full_name']}\n")
         href = ("mailto:" + ",".join(b["emails"])
                 + "?subject=" + urllib.parse.quote(SUBJECT)
-                + "&body=" + urllib.parse.quote(body))
+                + "&body=" + urllib.parse.quote(body.replace("\n", "\r\n")))
+        if len(href) > 1900:
+            print(f"! {b['id']}: mailto link is {len(href)} chars; some "
+                  "systems truncate past ~2000 — prefer `compose` or `eml` "
+                  "for this one.")
         rows.append(f'<li><a href="{href}">{b["name"]}</a> '
                     f'<small>{", ".join(b["emails"])}</small></li>')
     page = ("<!doctype html><meta charset='utf-8'>"
             "<title>Opt-out emails</title>"
             "<h1>Data broker opt-out emails</h1>"
             "<p>Each link opens a pre-filled message in your default mail "
-            "client (set Thunderbird as default). After sending, run "
+            "client (set Thunderbird as default). These use a condensed "
+            "request — <code>compose</code> and <code>eml</code> produce "
+            "the full letter. After sending, run "
             "<code>python3 optout.py mark &lt;id&gt; sent</code>.</p>"
             "<ol>" + "".join(rows) + "</ol>")
     out = BASE / "mailto.html"
@@ -622,16 +686,19 @@ def cmd_send(args):
             f"Send {len(targets)} email(s) now? [y/N]: ").strip().lower() != "y":
         print("Aborted.")
         return
+    username = smtp_cfg.get("username") or cfg["identity"]["email"]
     password = os.environ.get("OPTOUT_SMTP_PASSWORD") or getpass.getpass(
-        f"SMTP password for {smtp_cfg.get('username')}: ")
+        f"SMTP password for {username}: ")
     port = smtp_cfg.get("port", 587)
     context = ssl.create_default_context()
-    cls = smtplib.SMTP_SSL if port == 465 else smtplib.SMTP
-    with cls(host, port, timeout=60) as server:
-        if cls is smtplib.SMTP:
+    if port == 465:
+        server = smtplib.SMTP_SSL(host, port, timeout=60, context=context)
+    else:
+        server = smtplib.SMTP(host, port, timeout=60)
+    with server:
+        if port != 465:
             server.starttls(context=context)
-        server.login(smtp_cfg.get("username") or cfg["identity"]["email"],
-                     password)
+        server.login(username, password)
         for b in targets:
             entry = broker_state(state, b["id"])
             msg = EmailMessage()
@@ -672,13 +739,14 @@ def cmd_check_upstream(args):
 
 # ---------------------------------------------------------------------- main
 
-def add_target_args(p, with_send_opts=True):
+def add_target_args(p, all_email=True, yes=True):
     p.add_argument("ids", nargs="*", help="broker id(s); default: all "
                    "pending email-based brokers")
-    p.add_argument("--all-email", action="store_true",
-                   help="include brokers where email is a fallback, not the "
-                        "primary route")
-    if with_send_opts:
+    if all_email:
+        p.add_argument("--all-email", action="store_true",
+                       help="include brokers where email is a fallback, not "
+                            "the primary route")
+    if yes:
         p.add_argument("--yes", "-y", action="store_true",
                        help="no per-broker prompts")
 
@@ -715,7 +783,7 @@ def main(argv=None):
 
     p = sub.add_parser("followup",
                        help="compose follow-ups for overdue requests")
-    add_target_args(p)
+    add_target_args(p, all_email=False)
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=cmd_followup)
 
@@ -729,7 +797,7 @@ def main(argv=None):
     p.set_defaults(func=cmd_eml)
 
     p = sub.add_parser("mailto", help="write mailto.html with pre-filled links")
-    add_target_args(p, with_send_opts=False)
+    add_target_args(p, yes=False)
     p.set_defaults(func=cmd_mailto)
 
     p = sub.add_parser("send", help="send directly via SMTP (no review!)")
@@ -752,7 +820,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     try:
         args.func(args)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, EOFError):
         print("\nInterrupted — progress already made was saved.")
         sys.exit(130)
 

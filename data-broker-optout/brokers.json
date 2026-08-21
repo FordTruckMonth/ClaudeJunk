@@ -122,7 +122,25 @@
    "preferred_method": "form",
    "instructions": "Search for your information in the top search bar at Clustal.org and click \"view full record\" to grab that URL (important: the original URL will not work). Go to the Privacy Control page, enter the URL, and click \"remove my info,\" then enter your email address and click \"remove my info\" again. Finally, click the opt-out link in the email sent to you.",
    "covers": [],
-   "notes": "If you have more than one listing, you'll need a different email address for each one."
+   "notes": "If you have more than one listing, you'll need a different email address for each one.",
+   "suspect": "clustal.org is the home of the Clustal sequence-alignment software, not a people-search site. This upstream entry's wording matches ClustrMaps' known opt-out procedure with the domain swapped — a restored clustrmaps entry is included in this file; use that instead."
+  },
+  {
+   "id": "clustrmaps",
+   "name": "ClustrMaps",
+   "category": "people-search",
+   "priority": "crucial",
+   "flags": [],
+   "search_url": "https://clustrmaps.com/",
+   "optout_urls": [
+    "https://clustrmaps.com/privacy-control"
+   ],
+   "emails": [],
+   "phones": [],
+   "preferred_method": "form",
+   "instructions": "Search for your information at clustrmaps.com and open your record to grab its URL. Go to the Privacy Control page, enter the URL, and click \"remove my info,\" then enter your email address and click it again. Finally, click the opt-out link in the email sent to you.",
+   "covers": [],
+   "notes": "If you have more than one listing, you'll need a different email address for each one. Entry restored from prior BADBOOL versions: the fetched copy of the list contained this procedure under a corrupted 'Clustal' name/domain."
   },
   {
    "id": "intelius",
@@ -179,7 +197,8 @@
    "preferred_method": "form",
    "instructions": "Search for your name, then enter your listing's URL on the opt-out page. Click \"remove my info\" and add your email address, then click on the confirmation link emailed to you.",
    "covers": [],
-   "notes": null
+   "notes": null,
+   "suspect": "menstoppingviolence.org is a violence-prevention nonprofit; its /people/ page is a staff directory, not a people-search database. Submitting your email there would not remove you from anything."
   },
   {
    "id": "mylife",
@@ -335,9 +354,7 @@
     "https://www.acxiom.com/optout/",
     "https://privacyportal.onetrust.com/webform/342ca6ac-4177-4827-b61e-19070296cbd3/6896cf25-6953-4500-9c69-5a8fb6f6f932"
    ],
-   "emails": [
-    "Datenschutz@acxiom.com"
-   ],
+   "emails": [],
    "phones": [
     "(877) 774-2094"
    ],
@@ -1040,7 +1057,7 @@
    "category": "people-search",
    "priority": "normal",
    "flags": [],
-   "search_url": "Unite4heritgage.org",
+   "search_url": null,
    "optout_urls": [
     "https://www.unite4heritage.org/opt-out"
    ],
@@ -1049,7 +1066,8 @@
    "preferred_method": "form",
    "instructions": "Search for your information by filling out your first and last name, leaving off the city and state. Paste the URL of your listing into the opt-out page, click \"submit opt-out request,\" and type in your email address. When you get an email, click the \"confirm request\" button.",
    "covers": [],
-   "notes": "The search link in the source is written as \"Unite4heritgage.org\" (sic), copied exactly as it appears."
+   "notes": "The search link in the source is written as \"Unite4heritgage.org\" (sic), copied exactly as it appears. Upstream listed search URL \"Unite4heritgage.org\" (sic).",
+   "suspect": "unite4heritage.org is a UNESCO cultural-heritage campaign site, not a people-search broker. The upstream entry also pointed to a misspelled, schemeless domain (Unite4heritgage.org)."
   },
   {
    "id": "united-states-phone-book",
