@@ -1,0 +1,45 @@
+# Copy this file to me.toml and fill it in, or run:  python3 optout.py init
+#
+# GOLDEN RULE (from BADBOOL): only include information a broker ALREADY
+# publishes about you. Never hand a data broker new data to "verify" a
+# removal unless you have confirmed they already have it.
+
+[identity]
+full_name = "Jane Q. Public"
+# Other names your listings appear under (nicknames, maiden names, typos)
+other_names = ["Jane Public", "J. Q. Public"]
+# The email address you will send opt-out requests from
+email = "jane@example.com"
+# Optional. Most opt-outs do NOT need this — leave commented out unless a
+# broker already displays it.
+#dob = "1980-01-01"
+
+[contact]
+# Addresses as they appear on your listings (current first)
+addresses = ["123 Main St, Springfield, IL 62701"]
+phones = ["+1 555 555 5555"]
+# Old email addresses that appear on listings
+old_emails = []
+
+[preferences]
+# Days to wait before a follow-up is considered due (CCPA allows 45)
+followup_days = 45
+
+[thunderbird]
+# Command used to launch Thunderbird. Examples:
+#   "thunderbird"                                (native package, on PATH)
+#   "flatpak run org.mozilla.Thunderbird"        (Flatpak)
+#   "C:\\Program Files\\Mozilla Thunderbird\\thunderbird.exe"  (Windows)
+binary = "thunderbird"
+# How many compose windows to open before pausing for you to catch up
+batch_size = 5
+
+# Optional — only needed for `optout.py send` (direct SMTP, no Thunderbird
+# window). Copy these values from Thunderbird: Account Settings ->
+# Outgoing Server (SMTP). The password is NEVER stored here; `send` reads
+# it from the OPTOUT_SMTP_PASSWORD environment variable or prompts for it.
+[smtp]
+host = ""
+port = 587
+username = ""
+from_addr = ""

@@ -1,0 +1,12 @@
+To Whom It May Concern,
+
+On {sent_date} I sent you the request below asking that my personal information be removed from {broker_name}{covers_clause} and that I be opted out of any sale or sharing of my personal information. {days_since} days have now passed and I have not received confirmation that the request has been completed.
+
+Applicable U.S. state privacy laws, including the California Consumer Privacy Act, generally require that such requests be honored within 45 days. Please complete the removal described below and confirm in writing to this email address.
+
+For reference, the original request concerned:
+
+{identity_block}
+{profile_block}
+Thank you,
+{full_name}

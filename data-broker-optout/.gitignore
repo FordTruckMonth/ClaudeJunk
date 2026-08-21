@@ -1,0 +1,5 @@
+# Personal data — never commit these
+me.toml
+state.json
+outbox/
+mailto.html
